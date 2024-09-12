@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Transfer Ticket</title>
+  </head>
+  <body>
+    <h1>Transfer Ticket</h1>
+    <p>Ticket: {{ request.ticket }}</p>
+    <p>Buyer: {{ request.buyer.username }}</p>
+
+    {% if error %}
+    <p>Error: {{ error }}</p>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit">Complete Transfer</button>
+    </form>
+
+    <a href="{% url 'home' %}">Back to Home</a>
+  </body>
+</html>

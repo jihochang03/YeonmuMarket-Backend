@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>View Ticket</title>
+  </head>
+  <body>
+    <h1>Ticket Details</h1>
+    <p>Date: {{ ticket.date }}</p>
+    <p>Seat: {{ ticket.seat }}</p>
+    <p>Booking Details: {{ ticket.booking_details }}</p>
+    <p>Price: {{ ticket.price }}</p>
+    <p>Casting: {{ ticket.casting }}</p>
+
+    <h2>Request Transfer</h2>
+    <form method="post">
+      {% csrf_token %} {{ form.as_p }}
+      <button type="submit">Request Transfer</button>
+    </form>
+
+    <a href="{% url 'home' %}">Back to Home</a>
+  </body>
+</html>

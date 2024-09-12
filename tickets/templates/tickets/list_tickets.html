@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>List Ticket</title>
+  </head>
+  <body>
+    <h1>List a Ticket</h1>
+    <form method="post">
+      {% csrf_token %} {{ form.as_p }}
+      <button type="submit">Submit</button>
+    </form>
+    <a href="{% url 'home' %}">Home</a>
+  </body>
+</html>
