@@ -56,7 +56,7 @@ INSTALLED_APPS = [
     'user',
     'tickets',
     'drf_yasg',
-    'conservations',
+    'conversations',
     'payments',
     'allauth',
     'allauth.account',

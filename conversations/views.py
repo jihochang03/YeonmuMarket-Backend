@@ -15,7 +15,7 @@ def start_conversation(request, ticket_id):
         )
         return redirect('view_conversation', conversation_id=conversation.id)
     
-    return render(request, 'conservations/start_conversation.html', {'ticket': ticket})
+    return render(request, 'conversations/start_conversation.html', {'ticket': ticket})
 
 def view_conversation(request, conversation_id):
     conversation = get_object_or_404(Conversation, id=conversation_id)
@@ -30,4 +30,4 @@ def view_conversation(request, conversation_id):
         )
         return redirect('view_conversation', conversation_id=conversation.id)
     
-    return render(request, 'conservations/view_conversation.html', {'conversation': conversation, 'messages': messages})
+    return render(request, 'conversations/view_conversation.html', {'conversation': conversation, 'messages': messages})

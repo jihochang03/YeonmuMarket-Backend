@@ -50,6 +50,6 @@ urlpatterns = [
         name="schema-swagger-ui",
     ),
     path('payments/', include('payments.urls')),
-    path('conservations/', include('conservations.urls')),
+    path('conversations/', include('conversations.urls')),
     path('logout/', logout_view, name='logout'), 
 ]

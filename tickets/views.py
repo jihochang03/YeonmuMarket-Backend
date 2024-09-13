@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
-from .models import Ticket, TransferRequest, TransferRequest, TransferHistory
+from .models import Ticket, TransferRequest, TransferHistory
 from .forms import TicketForm, TransferRequestForm
 from .signals import notify_owner
+from conversations.models import Conversation, Message
 
 def home(request):
     return render(request, 'home.html')
@@ -94,21 +95,52 @@ def share_ticket(request, ticket_id):
 
     return render(request, 'share_ticket.html', {'ticket': ticket})
 
-def complete_transfer(request, transfer_id):
-    # 양도 요청을 조회합니다.
-    transfer_request = get_object_or_404(TransferRequest, id=transfer_id)
-    
-    if request.method == 'POST':
-        # 양도 요청 완료 처리
-        # 예: 양도 요청을 완료 상태로 변경하고 저장
-        # 실제 구현은 여기에 추가합니다.
-        TransferHistory.objects.create(
-            ticket=transfer_request.ticket,
-            transferee=transfer_request.buyer,
-            transfer_date=transfer_request.created_at,
-            chat_room="Completed chat room"
-        )
-        transfer_request.mark_as_completed()  # 양도 요청 완료 상태로 변경
-        return redirect('home')  # 완료 후 홈으로 리디렉션
+@login_required
+def conversation_view(request, ticket_id):
+    # Get the conversation for the ticket or create one
+    ticket = get_object_or_404(Ticket, id=ticket_id)
+    conversation, created = Conversation.objects.get_or_create(
+        ticket=ticket,
+        defaults={
+            'transferor': ticket.owner,
+            'transferee': request.user  # Assuming the user viewing is the transferee
+        }
+    )
 
-    return render(request, 'complete_transfer.html', {'transfer_request': transfer_request})
+    if request.method == "POST":
+        # User sends a message
+        content = request.POST.get('content')
+        if content:
+            Message.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                content=content
+            )
+
+    messages = conversation.messages.all()
+    return render(request, 'conversation.html', {'conversation': conversation, 'messages': messages})
+
+@login_required
+def complete_transfer(request, transfer_id):
+    # Mark the transfer as completed
+    conversation = get_object_or_404(Conversation, id=transfer_id)
+    if request.method == "POST":
+        conversation.is_completed = True
+        conversation.save()
+        # Update transferor and transferee's lists
+        # Add logic to update the ticket status if needed
+        return redirect('transaction_history')
+
+    return render(request, 'complete_transfer.html', {'conversation': conversation})
+
+@login_required
+def cancel_transfer(request, transfer_id):
+    # Mark the transfer as canceled
+    conversation = get_object_or_404(Conversation, id=transfer_id)
+    if request.method == "POST":
+        # You can either delete the conversation or mark it as not completed
+        conversation.is_completed = False
+        conversation.save()
+        return redirect('list_ticket')
+
+    return render(request, 'cancel_transfer.html', {'conversation': conversation})

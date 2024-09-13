@@ -1,0 +1,26 @@
+<h2>Conversation for Ticket {{ conversation.ticket.id }}</h2>
+
+<div>
+  <ul>
+    {% for message in messages %}
+    <li>
+      <strong>{{ message.sender.username }}:</strong> {{ message.content }}
+      <em>{{ message.sent_at }}</em>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<form method="POST">
+  {% csrf_token %}
+  <textarea
+    name="content"
+    rows="4"
+    cols="50"
+    placeholder="Enter your message"
+  ></textarea>
+  <button type="submit">Send</button>
+</form>
+
+<a href="{% url 'complete_transfer' conversation.id %}">Complete Transfer</a>
+<a href="{% url 'cancel_transfer' conversation.id %}">Cancel Transfer</a>
