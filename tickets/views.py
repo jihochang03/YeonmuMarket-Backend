@@ -6,9 +6,11 @@ from .forms import TicketForm, TransferRequestForm
 from .signals import notify_owner
 from conversations.models import Conversation, Message
 
+#홈 api
 def home(request):
     return render(request, 'home.html')
 
+#티켓 목록-양도와 양수를 분리
 @login_required
 def list_ticket(request):
     if request.method == 'POST':
@@ -20,8 +22,20 @@ def list_ticket(request):
             return redirect('home')
     else:
         form = TicketForm()
-    return render(request, 'tickets/list_tickets.html', {'form': form})
 
+    # Fetch transferable tickets (owned by the user)
+    transferable_tickets = Ticket.objects.filter(owner=request.user)
+
+    # Fetch transfer requests where the user is the buyer
+    my_transfer_requests = TransferRequest.objects.filter(buyer=request.user)
+
+    return render(request, 'tickets/list_tickets.html', {
+        'form': form,
+        'transferable_tickets': transferable_tickets,
+        'my_transfer_requests': my_transfer_requests,
+    })
+
+#특정 티켓을 보여주는 api
 @login_required
 def view_ticket(request, ticket_id):
     ticket = get_object_or_404(Ticket, id=ticket_id)
@@ -43,6 +57,8 @@ def view_ticket(request, ticket_id):
 
     return render(request, 'tickets/view_ticket.html', {'ticket': ticket, 'form': form})
 
+# 여기서부터는 손봐야될듯.....
+
 @login_required
 def transfer_ticket(request, request_id):
     transfer_request = get_object_or_404(TransferRequest, id=request_id)
@@ -55,60 +71,54 @@ def transfer_ticket(request, request_id):
             transfer_request.mark_as_completed()
             return redirect('transfer_success')
         else:
-            return render(request, 'tickets/transfer_ticket.html', {'request': transfer_request, 'error': 'Payment verification failed'})
+            return render(request, 'tickets/transfer.html', {'request': transfer_request, 'error': 'Payment verification failed'})
         
-    return render(request, 'tickets/transfer_ticket.html', {'request': transfer_request})
+    return render(request, 'tickets/transfer.html', {'request': transfer_request})
 
 def transaction_history(request):
-    # 사용자가 양도한 티켓 내역을 모두 가져옵니다.
     transfer_histories = TransferHistory.objects.all()
     data = list(transfer_histories.values(
         'id',
         'ticket',
         'transferee',
         'transfer_date',
-        'chat_room'
+        'conversation'
     ))
     return JsonResponse(data, safe=False)
 
 def transfer_history_detail(request, id):
-    # 특정 양도 내역을 가져옵니다.
     transfer_history = get_object_or_404(TransferHistory, id=id)
     data = {
         'id': transfer_history.id,
         'ticket': transfer_history.ticket.id,
         'transferee': transfer_history.transferee.id,
         'transfer_date': transfer_history.transfer_date.isoformat(),
-        'chat_room': transfer_history.chat_room,
+        'conversation': transfer_history.conversation.id,
     }
     return JsonResponse(data)
 
+@login_required
 def share_ticket(request, ticket_id):
-    # 티켓을 조회합니다.
     ticket = get_object_or_404(Ticket, id=ticket_id)
     
     if request.method == 'POST':
-        # 티켓 공유 요청 처리
-        # 예: 공유 대상 사용자에게 티켓 정보를 전송하거나 저장
-        # 실제 구현은 여기에 추가합니다.
-        return redirect('home')  # 완료 후 홈으로 리디렉션
+        # Implement ticket sharing logic
+        return redirect('home')
 
-    return render(request, 'share_ticket.html', {'ticket': ticket})
+    return render(request, 'tickets/share_ticket.html', {'ticket': ticket})
 
 @login_required
 def conversation_view(request, ticket_id):
-    # Get the conversation for the ticket or create one
     ticket = get_object_or_404(Ticket, id=ticket_id)
     conversation, created = Conversation.objects.get_or_create(
         ticket=ticket,
         defaults={
             'transferor': ticket.owner,
-            'transferee': request.user  # Assuming the user viewing is the transferee
+            'transferee': request.user
         }
     )
 
     if request.method == "POST":
-        # User sends a message
         content = request.POST.get('content')
         if content:
             Message.objects.create(
@@ -118,29 +128,24 @@ def conversation_view(request, ticket_id):
             )
 
     messages = conversation.messages.all()
-    return render(request, 'conversation.html', {'conversation': conversation, 'messages': messages})
+    return render(request, 'conversations/conversation.html', {'conversation': conversation, 'messages': messages})
 
 @login_required
 def complete_transfer(request, transfer_id):
-    # Mark the transfer as completed
-    conversation = get_object_or_404(Conversation, id=transfer_id)
+    transfer_history = get_object_or_404(TransferHistory, id=transfer_id)
     if request.method == "POST":
-        conversation.is_completed = True
-        conversation.save()
-        # Update transferor and transferee's lists
-        # Add logic to update the ticket status if needed
+        transfer_history.conversation.is_completed = True
+        transfer_history.conversation.save()
         return redirect('transaction_history')
 
-    return render(request, 'complete_transfer.html', {'conversation': conversation})
+    return render(request, 'tickets/complete_transfer.html', {'transfer_history': transfer_history})
 
 @login_required
 def cancel_transfer(request, transfer_id):
-    # Mark the transfer as canceled
-    conversation = get_object_or_404(Conversation, id=transfer_id)
+    transfer_history = get_object_or_404(TransferHistory, id=transfer_id)
     if request.method == "POST":
-        # You can either delete the conversation or mark it as not completed
-        conversation.is_completed = False
-        conversation.save()
+        transfer_history.conversation.is_completed = False
+        transfer_history.conversation.save()
         return redirect('list_ticket')
 
-    return render(request, 'cancel_transfer.html', {'conversation': conversation})
+    return render(request, 'tickets/cancel_transfer.html', {'transfer_history': transfer_history})

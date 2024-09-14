@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Complete Transfer</title>
+  </head>
+  <body>
+    <h1>Complete Transfer</h1>
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit" name="confirm_payment">Confirm Payment</button>
+    </form>
+  </body>
+</html>

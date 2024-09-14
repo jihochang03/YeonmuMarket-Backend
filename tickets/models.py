@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import User
-from conversations.models import Conversation
 
 class Ticket(models.Model):
     date = models.DateField(auto_now_add=True)
@@ -17,11 +16,10 @@ class TransferHistory(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)
     transferee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transferee')
     transfer_date = models.DateTimeField(auto_now_add=True)
-    
-    # 지연 임포트 사용
-    def save(self, *args, **kwargs):
-        from conversations.models import Conversation  # 여기에서 Conversation을 임포트
-        super().save(*args, **kwargs)
+    conversation = models.OneToOneField('conversations.Conversation', on_delete=models.CASCADE,null=True, blank=True)
+
+    def __str__(self):
+        return f"Transfer on {self.transfer_date} for {self.ticket}"
 
 class TransferRequest(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)

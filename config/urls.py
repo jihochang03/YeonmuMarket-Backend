@@ -1,19 +1,3 @@
-"""
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -37,19 +21,14 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('tickets/', include('tickets.urls')),  # tickets 앱의 URL 패턴을 포함
-    path('login/', include('user.urls')),  # login 관련 URL 패턴 포함
-    path('user/', include('user.urls')),  # user 앱의 URL 연결
+    path('tickets/', include('tickets.urls')),  # tickets 앱의 URL 패턴 포함
+    path('user/', include('user.urls')),  # user 관련 URL 통합
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('dashboard/', TemplateView.as_view(template_name='dashboard.html'), name='dashboard'),  # 대시보드 경로 추가
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('accounts/', include('allauth.urls')),  # allauth 경로 추가
-    path(
-        "swagger/",
-        schema_view.with_ui("swagger", cache_timeout=0),
-        name="schema-swagger-ui",
-    ),
-    path('payments/', include('payments.urls')),
-    path('conversations/', include('conversations.urls')),
-    path('logout/', logout_view, name='logout'), 
+    path('swagger/', schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
+    path('payments/', include('payments.urls')),  # payments 앱 URL 연결
+    path('conversations/', include('conversations.urls')),  # conversations 앱 URL 연결
+    path('logout/', logout_view, name='logout'),  # 로그아웃 URL
 ]

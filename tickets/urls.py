@@ -11,5 +11,5 @@ urlpatterns = [
     path('conversation/<int:ticket_id>/', conversation_view, name='conversation'),
     path('complete/<int:transfer_id>/', complete_transfer, name='complete_transfer'),
     path('cancel/<int:transfer_id>/', cancel_transfer, name='cancel_transfer'),
-    path('transfer_history/<int:id>/', transfer_history_detail, name='transfer_history_detail'),  # 새로 추가된 URL 패턴
+    path('transfer_history/<int:id>/', transfer_history_detail, name='transfer_history_detail'),
 ]
