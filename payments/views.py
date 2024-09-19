@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from .models import BankAccount
+from .models import BankAccount, Payment
 from .forms import BankAccountForm, VerifyBankAccountForm, PaymentForm
 from .utils import verify_code
 from user.models import UserProfile
@@ -50,3 +50,7 @@ def verify_bank_account(request, bank_account_id):
         form = VerifyBankAccountForm()
     
     return render(request, 'verify_bank_account.html', {'form': form})
+
+def payment_status(request, payment_id):
+    payment = get_object_or_404(Payment, id=payment_id)
+    return render(request, 'payments/payment_status.html', {'payment': payment})
