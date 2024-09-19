@@ -31,6 +31,7 @@ environ.Env.read_env(
 SECRET_KEY =env('SECRET_KEY')
 KAKAO_CLIENT_ID=env('KAKAO_CLIENT_ID')
 KAKAO_REDIRECT_URI = 'http://localhost:8000/login/kakao/callback/'
+DATABASE_PASSWORD=env('DATABASE_PASSWORD')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -105,7 +106,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'yeonmumarketdb',          # The name of your PostgreSQL database
         'USER': 'admin',           # Your PostgreSQL username
-        'PASSWORD': '2024mutsha',      # Your PostgreSQL password
+        'PASSWORD': DATABASE_PASSWORD,      # Your PostgreSQL password
         'HOST': 'localhost',              # Or use an IP if your DB is hosted elsewhere
         'PORT': '5432',                   # Default PostgreSQL port
     }
