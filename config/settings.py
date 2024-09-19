@@ -30,14 +30,14 @@ environ.Env.read_env(
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY =env('SECRET_KEY')
 KAKAO_CLIENT_ID=env('KAKAO_CLIENT_ID')
-KAKAO_REDIRECT_URI = 'http://localhost:8000/login/kakao/callback/'
+KAKAO_REDIRECT_URI = 'http://127.0.0.8:8000/login/kakao/callback/'
 DATABASE_PASSWORD=env('DATABASE_PASSWORD')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 SITE_ID = 1
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['127.0.0.8', '127.0.0.1', 'localhost']
 
 
 # Application definition

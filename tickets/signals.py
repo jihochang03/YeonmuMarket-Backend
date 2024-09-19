@@ -1,8 +1,8 @@
-# signals.py
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import TransferHistory
-from .kakao_api import send_message  # 수정된 부분
+from .kakao_api import send_message  
 
 @receiver(post_save, sender=TransferHistory)
 def notify_owner(sender, instance, created, **kwargs):

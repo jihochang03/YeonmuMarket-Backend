@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from .models import Conversation, Message
 from tickets.models import TransferRequest, Ticket
 
+#여기도 수정 필요. 
+
 def start_conversation(request, ticket_id):
     ticket = get_object_or_404(Ticket, id=ticket_id)
     conversation, created = Conversation.objects.get_or_create(ticket=ticket)
