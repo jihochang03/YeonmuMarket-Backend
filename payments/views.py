@@ -1,13 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from .models import BankAccount, Payment
-from .forms import BankAccountForm, VerifyBankAccountForm, PaymentForm
+from .models import BankAccount
+from .forms import BankAccountForm, VerifyBankAccountForm
 from .utils import verify_code
 from user.models import UserProfile
 
 @login_required
-def add_bank_account(request):
+def register_bank_account(request):
     if request.method == 'POST':
         form = BankAccountForm(request.POST)
         if form.is_valid():
@@ -28,7 +27,7 @@ def verify_bank_account(request, bank_account_id):
         form = VerifyBankAccountForm(request.POST)
         if form.is_valid():
             verification_code = form.cleaned_data['verification_code']
-            if verify_code(bank_account, verification_code):  # Assume verify_code is a function that verifies the code
+            if verify_code(bank_account, verification_code):
                 # 인증 성공 처리
                 bank_account.is_verified = True
                 bank_account.save()
@@ -41,7 +40,6 @@ def verify_bank_account(request, bank_account_id):
                 
                 return redirect('payment_status', bank_account_id=bank_account.id)
             else:
-                # 인증 실패 처리
                 return render(request, 'verify_bank_account.html', {
                     'form': form, 
                     'error': '인증 코드가 올바르지 않습니다. 다시 시도해 주세요.'

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.serializers import ModelSerializer
 from .models import UserProfile
 from payments.models import BankAccount
 from django.contrib.auth.models import User
@@ -8,22 +9,13 @@ class BankAccountSerializer(serializers.ModelSerializer):
         model = BankAccount
         fields = ['account_number', 'bank_name']
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    bank_account = BankAccountSerializer(read_only=True)  # Include bank account details
-
-    class Meta:
-        model = UserProfile
-        fields = ['user', 'kakao_email', 'is_payment_verified', 'bank_account']
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'password', 'email']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = ["id", "username", "password"]
 
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password']
-        )
-        return user
+class UserProfileSerializer(ModelSerializer):
+    user = UserSerializer(read_only=True)
+    class Meta:
+        model = UserProfile
+        fields = "__all__"

@@ -1,14 +1,15 @@
+# user/urls.py
 from django.urls import path
-from .views import kakao_login, logout_view, kakao_callback, profile_view, login_view, UserProfileCreateView, create_user, UserProfileDetail
+from .views import KakaoSignInCallbackView, SignOutView, TokenRefreshView,  KakaoLoginView, UserProfileListView, UserProfileDetailView, CheckUsernameView, RemainingPointDeductView
 
+app_name = "UserProfile"
 urlpatterns = [
-    path('login/', login_view, name='login'),
-    path('logout/', logout_view, name='logout'),
-    path('login/kakao/', kakao_login, name='kakao_login'),
-    path('login/kakao/callback/', kakao_callback, name='kakao_callback'),
-    path('profile/', profile_view, name='profile'),
-    #여기서부터는 그냥 장고 내에서 확인하려고 만든 url
-    path('create/', UserProfileCreateView.as_view(), name='user_profile_create'),
-    path('create_user/', create_user, name='create_user'),
-    path('user_profiles/<int:pk>/', UserProfileDetail.as_view(), name='user_profile_detail'),
+    path("signout/", SignOutView.as_view()),
+    path("refresh/", TokenRefreshView.as_view()),
+    path("userinfo/", UserProfileListView.as_view()),
+    path("me/", UserProfileDetailView.as_view()),
+    path("check/", CheckUsernameView.as_view()),
+    path("pointreduce/", RemainingPointDeductView.as_view()),
+    path("kakao/login/", KakaoLoginView.as_view(), name="kakao-login"),  # 카카오 로그인 시작 URL
+    path("kakao/callback/", KakaoSignInCallbackView.as_view()),  
 ]

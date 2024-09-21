@@ -1,116 +1,252 @@
-import requests
-from django.conf import settings
-from django.shortcuts import redirect, render
-from django.urls import reverse
-from django.contrib.auth import login, logout
-from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+
+# Create your views here.
 from django.contrib.auth.models import User
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import get_object_or_404
-from .models import UserProfile
-from rest_framework import generics
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from rest_framework import status
-from .serializers import UserProfileSerializer, UserSerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.hashers import make_password
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from .models import UserProfile
+from django.conf import settings
+from django.shortcuts import redirect
+from django.views import View
+import requests
+from .serializers import UserSerializer, UserProfileSerializer
+from .request_serializers import SignUpRequestSerializer, SignInRequestSerializer, TokenRefreshRequestSerializer, UserProfileUpdateRequestSerializer, SignOutRequestSerializer
 
-#카카오 로그인 링크 user/ login/kakao/로 접근하면 로그인 가능. 
-def kakao_login(request):
-    kakao_authorize_url = (
-        "https://kauth.kakao.com/oauth/authorize"
-        f"?client_id={settings.KAKAO_CLIENT_ID}"
-        f"&redirect_uri={settings.KAKAO_REDIRECT_URI}"
-        "&response_type=code"
+kakao_secret = settings.KAKAO_KEY
+kakao_redirect_uri = settings.KAKAO_REDIRECT_URI
+
+def set_token_on_response_cookie(user, status_code) -> Response:
+    token = RefreshToken.for_user(user)
+    user_profile = UserProfile.objects.get(user=user)
+    serialized_data = UserProfileSerializer(user_profile).data
+    res = Response(serialized_data, status=status_code)
+    res.set_cookie("refresh_token", value=str(token))
+    res.set_cookie("access_token", value=str(token.access_token))
+    return res
+
+class KakaoLoginView(View):
+    def get(self, request):
+        kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={kakao_secret}&redirect_uri={kakao_redirect_uri}&response_type=code"
+        return redirect(kakao_auth_url)
+
+class TokenRefreshView(APIView):
+    @swagger_auto_schema(
+        operation_id="토큰 재발급",
+        operation_description="access 토큰을 재발급 받습니다.",
+        request_body=TokenRefreshRequestSerializer,
+        responses={200: UserSerializer, 400: "Bad Request", 401: "Unauthorized"},
+        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
     )
-    return redirect(kakao_authorize_url)
-
-#카카오 로그인으로 리디렉션. 
-def login_view(request):
-    return redirect(reverse('kakao_login'))
-
-#로그아웃하면 로그인 페이지로 들어가지도록 user/ logout/
-def logout_view(request):
-    logout(request)
-    return redirect('login')  # Redirect to login after logout
-
-#카카오 로그인 후 콜백되어서 user에는 이메일이랑 랜덤 패스워드, userprofile에는 이메일이 들어가게 된다. 
-#해당 계정이 인증된 계좌가 하나라도 있을 경우 홈화면으로 가게 되고 아닌 경우 검증하게 된다. 
-def kakao_callback(request):
-    code = request.GET.get('code')
-    if not code:
-        return redirect('login')
-
-    access_token = get_kakao_access_token(code)
-    if access_token:
-        user_info = get_kakao_user_info(access_token)
-        kakao_email = user_info.get('email')
-
-        if kakao_email:
-            user, created = User.objects.get_or_create(
-                email=kakao_email,
-                defaults={'username': kakao_email, 'password': User.objects.make_random_password()}
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response(
+                {"detail": "no refresh token"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-            UserProfile.objects.update_or_create(
+        try:
+            RefreshToken(refresh_token).verify()
+        except:
+            return Response(
+                {"detail": "please signin again."}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        new_access_token = str(RefreshToken(refresh_token).access_token)
+        response = Response({"detail": "token refreshed"}, status=status.HTTP_200_OK)
+        response.set_cookie("access_token", value=str(new_access_token), httponly=True)
+        return response
+
+
+class SignOutView(APIView):
+    @swagger_auto_schema(
+        operation_id="로그아웃",
+        operation_description="로그아웃을 진행합니다.",
+        request_body=SignOutRequestSerializer,
+        responses={204: "No Content", 400: "Bad Request", 401: "Unauthorized"},
+        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+    )
+    def post(self, request):
+
+        if not request.user.is_authenticated:
+            return Response(
+                {"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response(
+                {"detail": "no refresh token"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        RefreshToken(refresh_token).blacklist()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+class RemainingPointDeductView(APIView):
+    @swagger_auto_schema(
+        operation_id="포인트 차감",
+        operation_description="유저가 사주 상세 정보를 구매할 때, 보유 포인트를 차감합니다.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                "point_to_deduct": openapi.Schema(
+                    type=openapi.TYPE_INTEGER,
+                    description="차감할 포인트",
+                )
+            },
+        ),
+        responses={200: UserProfileSerializer, 400: "point_to_deduct field missing.", 401: "please signin", 404: "UserProfile Not found."},
+        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+    )
+    def put(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            user_profile = UserProfile.objects.get(user=user)
+            remaining_points = user_profile.remaining_points
+            point_to_deduct = request.data.get("point_to_deduct")
+            if not point_to_deduct:
+                return Response({"detail": "point_to_deduct field missing."}, status=status.HTTP_400_BAD_REQUEST)
+            if remaining_points < point_to_deduct:
+                return Response({"detail": "Not enough points."}, status=status.HTTP_400_BAD_REQUEST)
+            user_profile.remaining_points -= point_to_deduct
+            user_profile.save()
+            serializer = UserProfileSerializer(user_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except UserProfile.DoesNotExist:
+            return Response({"detail": "UserProfile Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class UserProfileListView(APIView):
+    @swagger_auto_schema(
+        operation_id="유저 정보 확인",
+        operation_description="등록된 모든 유저 정보를 가져옵니다",
+        request_body=None,
+        responses={200: UserProfileSerializer(many=True), 401: "please signin"},
+        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+    )
+    def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+        user_profile = UserProfile.objects.all()
+        serializer = UserProfileSerializer(user_profile, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class UserProfileDetailView(APIView):
+    @swagger_auto_schema(
+        operation_id="유저 정보 확인",
+        operation_description="토큰을 기반으로, 유저 세부 정보를 가져옵니다.",
+        request_body=None,
+        responses={200: UserProfileSerializer, 404: "UserProfile Not found.", 401: "please signin"},
+        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+    )
+    def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            user_profile = UserProfile.objects.get(user=user)
+            serializer = UserProfileSerializer(user_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except UserProfile.DoesNotExist:
+            return Response({"detail": "UserProfile Not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+    @swagger_auto_schema(
+        operation_id="유저 정보 수정",
+        operation_description="유저 개인 프로필 정보(닉네임, 프로필 사진)를 수정합니다.",
+        request_body=UserProfileUpdateRequestSerializer,
+        responses={200: UserProfileSerializer, 400: "[profilepic_id, nickname] fields missing.", 401: "please signin", 404: "UserProfile Not found."},
+        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+    )
+    def put(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            user_profile = UserProfile.objects.get(user=user)
+            profilepic_id = request.data.get("profilepic_id")
+            nickname = request.data.get("nickname")
+            if not profilepic_id or not nickname:
+                return Response({"detail": "[profilepic_id, nickname] fields missing."}, status=status.HTTP_400_BAD_REQUEST)
+            user_profile.profilepic_id=profilepic_id
+            user_profile.nickname = nickname
+            user_profile.save()
+            serializer = UserProfileSerializer(user_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except UserProfile.DoesNotExist:
+            return Response({"detail": "UserProfile Not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+class CheckUsernameView(APIView):
+    @swagger_auto_schema(
+        operation_id="유저명 중복 확인",
+        operation_description="유저명이 이미 존재하는지 확인합니다.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                "username": openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="중복을 확인할 유저명",
+                )
+            },
+        ),
+        responses={200: "Username is available", 400: "Username already exists"},
+    )
+    def post(self, request):
+        username = request.data.get("username")
+        if User.objects.filter(username=username).exists():
+            return Response({"message": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Username is available"}, status=status.HTTP_200_OK)
+
+class KakaoSignInCallbackView(APIView):
+    def post(self, request):
+        ### 프론트로 들어온 code를 받아서 카카오로부터 access_token을 받아옴
+        code = request.GET.get("code") # 쿼리스트링으로 구현되어 있지만 나중에 body로 바뀔 수도...
+        request_uri = f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={kakao_secret}&redirect_uri={kakao_redirect_uri}&code={code}"
+        response = requests.post(request_uri)
+        access_token = response.json().get("access_token")
+
+        ### 카카오로부터 받은 access_token을 이용해 카카오톡 유저 정보를 받아옴
+        user_info = requests.get(
+            "https://kapi.kakao.com/v2/user/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        user_info = user_info.json()
+        
+        try:
+            user = User.objects.get(username=user_info.get("id"))
+        except User.DoesNotExist:
+            user_data = {
+                "username": user_info.get("id"),
+                "password": "social_login_password",
+            }
+            user_serializer = UserSerializer(data=user_data)
+            if user_serializer.is_valid(raise_exception=True):
+                user_serializer.validated_data["password"] = make_password(
+                    user_serializer.validated_data["password"]
+                )
+                user = user_serializer.save()
+
+            UserProfile.objects.create(
                 user=user,
-                defaults={'kakao_email': kakao_email}
+                is_social_login=True,
             )
+        
+        # 로그인된 유저의 UserProfile 확인
+        user_profile = UserProfile.objects.get(user=user)
 
-            login(request, user)
+        if user_profile.bank_account:
+            # 계좌가 등록되어 있으면 payment_verified로 설정하고 홈으로 이동
+            user_profile.is_payment_verified = True
+            user_profile.save()
+            return redirect('home')  # 'home' URL로 리다이렉트
+        else:
+            # 계좌가 없으면 계좌 등록 페이지로 리다이렉트
+            user_profile.is_payment_verified = False
+            user_profile.save()
+            return redirect('register_bank_account')  # 계좌 등록 페이지로 리다이렉트
 
-            user_profile = user.userprofile
-            if not user_profile.is_payment_verified:
-                return redirect('verify_bank_account')  
-            
-            return redirect('home')
-
-    return redirect('login')
-
-#로그인된 유저의 프로필을 보여줌
-@login_required
-def profile_view(request):
-    profile = request.user.userprofile
-    return render(request, 'profile.html', {'profile': profile})
-
-def get_kakao_access_token(code):
-    token_url = 'https://kauth.kakao.com/oauth/token'
-    data = {
-        'grant_type': 'authorization_code',
-        'client_id': settings.KAKAO_CLIENT_ID,
-        'redirect_uri': settings.KAKAO_REDIRECT_URI,
-        'code': code,
-    }
-    response = requests.post(token_url, data=data)
-    return response.json().get('access_token')
-
-def get_kakao_user_info(access_token):
-    user_info_url = 'https://kapi.kakao.com/v2/user/me'
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = requests.get(user_info_url, headers=headers)
-    kakao_account = response.json().get('kakao_account', {})
-    return {'email': kakao_account.get('email')}
-
-
-#여기서부터는 그냥 장고 내에서 확인하려고 만든 뷰
-class UserProfileDetail(generics.RetrieveUpdateAPIView):
-    queryset = UserProfile.objects.all()
-    serializer_class = UserProfileSerializer
-
-    def get_object(self):
-        user = self.request.user  # 현재 로그인된 사용자
-        return get_object_or_404(UserProfile, user=user)
-
-@csrf_exempt
-@api_view(['POST'])
-def create_user(request):
-    if request.method == 'POST':
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class UserProfileCreateView(generics.CreateAPIView):
-    queryset = UserProfile.objects.all()
-    serializer_class = UserProfileSerializer
+        return set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)

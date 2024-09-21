@@ -4,7 +4,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.views.generic import TemplateView
-from user.views import logout_view
 
 # Swagger 관련 설정
 schema_view = get_schema_view(
@@ -30,5 +29,4 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
     path('payments/', include('payments.urls')),  # payments 앱 URL 연결
     path('conversations/', include('conversations.urls')),  # conversations 앱 URL 연결
-    path('logout/', logout_view, name='logout'),  # 로그아웃 URL
 ]
