@@ -1,8 +1,10 @@
 from django.urls import path
-from .views import register_bank_account, verify_bank_account, payment_status
+from .views import AccountRegisterView, AccountVerifyView, AccountDetailView, AccountRegisterAndVerifyView, AccountVerifyAndDeleteOldView
 
 urlpatterns = [
-    path('register/', register_bank_account, name='register_bank_account'),
-    path('verify/<int:bank_account_id>/', verify_bank_account, name='verify_bank_account'),
-    path('payment-status/<int:bank_account_id>/', payment_status, name='payment_status'),
+    path('register/', AccountRegisterView.as_view(), name='account-register'),
+    path('<int:account_id>/verify/', AccountVerifyView.as_view(), name='account-verify'),
+    path('', AccountDetailView.as_view(), name='account-detail'),
+    path('register-and-verify/', AccountRegisterAndVerifyView.as_view(), name='account-register-and-verify'),
+    path('<int:account_id>/verify-and-delete/', AccountVerifyAndDeleteOldView.as_view(), name='account-verify-and-delete'),
 ]

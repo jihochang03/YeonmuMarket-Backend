@@ -1,9 +1,8 @@
 from django.urls import path
-from . import views
+from .views import JoinConversationView, TransferIntentView, LeaveConversationView
 
 urlpatterns = [
-    path('start/<int:ticket_id>/', views.start_conversation, name='start_conversation'),
-    path('<int:conversation_id>/', views.view_conversation, name='view_conversation'),
-    path('<int:conversation_id>/intent-to-transfer/', views.intent_to_transfer, name='intent_to_transfer'),
-    path('<int:conversation_id>/complete-transfer/', views.complete_transfer, name='complete_transfer'),
+    path('join/<int:ticket_id>/', JoinConversationView.as_view(), name='join-conversation'),
+    path('leave/<int:conversation_id>/', LeaveConversationView.as_view(), name='leave-conversation'),
+    path('<int:conversation_id>/intent/', TransferIntentView.as_view()),
 ]

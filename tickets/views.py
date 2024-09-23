@@ -1,33 +1,17 @@
 from django.shortcuts import render
-# from rest_framework.decorators import api_view
 from rest_framework.views import APIView
+from drf_yasg import openapi
 from rest_framework import status
 from rest_framework.response import Response
 from .models import Ticket
 from .serializers import TicketSerializer
 from drf_yasg.utils import swagger_auto_schema
-
+from django.db.models import Q
 from .request_serializers import TicketListRequestSerializer, TicketDetailRequestSerializer
-
-
 from user.models import User
 from user.request_serializers import SignInRequestSerializer
 
 class TicketListView(APIView):
-    @swagger_auto_schema(
-        operation_id="티켓 목록 조회",
-        operation_description="티켓 목록을 조회합니다.",
-        responses={
-            200: TicketSerializer(many=True),
-            404: "Not Found",
-            400: "Bad Request",
-        },
-    )
-    def get(self, request):
-        Tickets = Ticket.objects.all()
-        serializer = TicketSerializer(Tickets, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
     @swagger_auto_schema(
         operation_id="티켓 생성",
         operation_description="티켓 양도글을 생성합니다.",
@@ -205,3 +189,54 @@ class TicketDetailView(APIView):
         ticket.save()
         serializer = TicketSerializer(instance=ticket)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class TransferListView(APIView):
+    @swagger_auto_schema(
+        operation_id="양도 티켓 목록 조회",
+        operation_description="사용자가 양도한 티켓 목록을 조회합니다.",
+        responses={
+            200: TicketSerializer(many=True),
+            404: "Not Found",
+            400: "Bad Request",
+        },
+    )
+    def get(self, request):
+        user = request.user
+
+        # 해당 사용자가 양도한 티켓 목록 (양도 완료 및 양도 중인 티켓 포함)
+        transfer_list = Ticket.objects.filter(
+            owner=user,
+            status__in=['transfer_pending', 'transfer_completed']
+        ).order_by('-id')
+
+        if not transfer_list.exists():
+            return Response({"detail": "No transferred tickets found."}, status=status.HTTP_404_NOT_FOUND)
+
+        transfer_serializer = TicketSerializer(transfer_list, many=True)
+        return Response(transfer_serializer.data, status=status.HTTP_200_OK)
+
+
+class ReceivedListView(APIView):
+    @swagger_auto_schema(
+        operation_id="양수 티켓 목록 조회",
+        operation_description="사용자가 양수받은 티켓 목록을 조회합니다.",
+        responses={
+            200: TicketSerializer(many=True),
+            404: "Not Found",
+            400: "Bad Request",
+        },
+    )
+    def get(self, request):
+        user = request.user
+
+        # 해당 사용자가 양수받은 티켓 목록 (양수 완료,양수 중인 티켓 표시)
+        received_list = Ticket.objects.filter(
+            transferee=user,
+            status__in=['transfer_pending', 'received_completed']
+        ).order_by('-id')
+
+        if not received_list.exists():
+            return Response({"detail": "No received tickets found."}, status=status.HTTP_404_NOT_FOUND)
+
+        received_serializer = TicketSerializer(received_list, many=True)
+        return Response(received_serializer.data, status=status.HTTP_200_OK)

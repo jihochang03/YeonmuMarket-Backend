@@ -18,16 +18,6 @@ def send_transfer_notification(email, message):
     )
 
 @shared_task
-def verify_payment(transfer_request_id):
-    """Verify payment for the transfer request."""
-    transfer_request = get_object_or_404(TransferRequest, id=transfer_request_id)
-    # Placeholder for actual payment verification logic
-    payment_successful = True  # This should be replaced with actual logic
-    if payment_successful:
-        transfer_request.mark_as_completed()
-        transfer_request.save()  # Make sure to save the transfer request after updating
-
-@shared_task
 def update_ticket_transfer(conversation_id):
     """Update ticket transfer status and conversation completion."""
     conversation = get_object_or_404(Conversation, id=conversation_id)

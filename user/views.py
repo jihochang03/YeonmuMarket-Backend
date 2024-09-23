@@ -1,6 +1,4 @@
 from django.shortcuts import render
-
-# Create your views here.
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.views import APIView
@@ -15,7 +13,7 @@ from django.shortcuts import redirect
 from django.views import View
 import requests
 from .serializers import UserSerializer, UserProfileSerializer
-from .request_serializers import SignUpRequestSerializer, SignInRequestSerializer, TokenRefreshRequestSerializer, UserProfileUpdateRequestSerializer, SignOutRequestSerializer
+from .request_serializers import TokenRefreshRequestSerializer, SignOutRequestSerializer, UserProfileUpdateRequestSerializer
 
 kakao_secret = settings.KAKAO_KEY
 kakao_redirect_uri = settings.KAKAO_REDIRECT_URI
@@ -123,37 +121,25 @@ class RemainingPointDeductView(APIView):
 class RemainingPointAddView(APIView):
     @swagger_auto_schema(
         operation_id="포인트 추가",
-        operation_description="유저가 포인트를 추가합니다.",
+        operation_description="유저가 포인트를 추가합니다. 추가할 포인트는 양의 정수여야 합니다.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
                 "point_to_add": openapi.Schema(
                     type=openapi.TYPE_INTEGER,
-                    description="추가할 포인트",
+                    description="추가할 포인트. 양의 정수만 가능합니다.",
                 )
             },
         ),
-        responses={200: UserProfileSerializer, 400: "point_to_add field missing.", 401: "please signin", 404: "UserProfile Not found."},
+        responses={200: UserProfileSerializer, 400: "point_to_add field missing 또는 잘못된 값.", 401: "로그인 필요", 404: "UserProfile Not found."},
         manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
     )
     def put(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        try:
-            user_profile = UserProfile.objects.get(user=user)
-            point_to_add = request.data.get("point_to_add")
-            if point_to_add is None:
-                return Response({"detail": "point_to_add field missing."}, status=status.HTTP_400_BAD_REQUEST)
-            
-            user_profile.remaining_points += point_to_add
-            user_profile.save()
-            serializer = UserProfileSerializer(user_profile)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        
-        except UserProfile.DoesNotExist:
-            return Response({"detail": "UserProfile Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # 함수 내부에서 추가된 포인트가 유효한지 체크
+        point_to_add = request.data.get("point_to_add")
+        if point_to_add is None or point_to_add <= 0:
+            return Response({"detail": "추가할 포인트는 양의 정수여야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
 class UserProfileListView(APIView):
     @swagger_auto_schema(
         operation_id="유저 정보 확인",
@@ -279,25 +265,20 @@ class KakaoSignInCallbackView(APIView):
             # 새로 생성된 유저 프로필 저장
             UserProfile.objects.create(
                 user=user,
-                is_social_login=True,
+                #is_social_login=True,
                 kakao_email=kakao_email,
                 kakao_token=access_token,  # access_token 저장
             )
 
-        # 로그인된 유저의 프로필 정보 불러오기
-        user_profile = UserProfile.objects.get(user=user)
+            user_profile = UserProfile.objects.get(user=user)
 
-        # 계좌 등록 여부에 따라 리다이렉트
-        if user_profile.bank_account:
+            # 계좌 등록 여부에 따라 리다이렉트
+            if user_profile.is_payment_verified:
             # 계좌가 등록된 경우 홈으로 리다이렉트
-            user_profile.is_payment_verified = True
-            user_profile.save()
-            return redirect('home')
-        else:
+                return redirect('home')
+            else:
             # 계좌가 등록되지 않은 경우 계좌 등록 페이지로 리다이렉트
-            user_profile.is_payment_verified = False
-            user_profile.save()
-            return redirect('register_bank_account')
+                return redirect('account-register')
 
         # 로그인이 완료되면 토큰을 설정하여 응답에 포함 (JWT나 세션 기반)
         return set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)

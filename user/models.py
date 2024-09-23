@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from payments.models import Account
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -9,5 +10,8 @@ class UserProfile(models.Model):
     is_social_login = models.BooleanField(default=False)
     kakao_email = models.EmailField(default="")
     is_payment_verified = models.BooleanField(default=False)
-    bank_account = models.OneToOneField('payments.BankAccount', null=True, blank=True, on_delete=models.SET_NULL)
+    bank_account = models.OneToOneField(Account, null=True, blank=True, on_delete=models.SET_NULL)  # 계좌 연결
     kakao_token = models.CharField(max_length=256, blank=True, null=True)  # 카카오톡 액세스 토큰 추가
+
+    def __str__(self):
+        return self.nickname or self.user.username
