@@ -34,12 +34,14 @@ class TicketListView(APIView):
             )
         username = owner_info.get("username")
         password = owner_info.get("password")
+        print(username)
+        print(password)
         if not username or not password:
             return Response(
                 {"detail": "[username, password] fields missing in owner"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not title or not date or not seat or not price or not casting or not uploaded_file:
+        if not title or not date or not seat or not price or not casting: #or not uploaded_file:
             return Response(
                 {"detail": "content fields missing."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -145,6 +147,7 @@ class TicketDetailView(APIView):
             )
         username = author_info.get("username")
         password = author_info.get("password")
+        
         try:
             author = User.objects.get(username=username)
             if not author.check_password(password):

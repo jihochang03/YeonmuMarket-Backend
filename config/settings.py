@@ -227,7 +227,6 @@ CELERY_TIMEZONE = 'Asia/Seoul'
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
 )
 
 # 로그인 및 리디렉션 설정
