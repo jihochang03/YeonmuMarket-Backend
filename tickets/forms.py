@@ -16,3 +16,7 @@ class TransferRequestForm(forms.ModelForm):
     class Meta:
         model = TransferRequest
         fields = ['buyer_message']
+        
+from django import forms
+from .models import Ticket
+
