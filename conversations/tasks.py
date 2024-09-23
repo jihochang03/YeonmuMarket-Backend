@@ -4,6 +4,8 @@ from django.shortcuts import get_object_or_404
 from .models import Conversation
 from tickets.models import TransferRequest
 
+#이중에 사용할 task 골라서 사용할 예정. 
+
 @shared_task
 def send_transfer_notification(email, message):
     """Send email notification about the ticket transfer."""

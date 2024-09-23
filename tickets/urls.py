@@ -1,14 +1,16 @@
 from django.urls import path
-from .views import TicketListView, TicketDetailView, TicketCreateView, TicketUpdateView, TicketDeleteView, TransferRequestCreateView, TransferHistoryView
+from .views import (
+    TicketListCreateAPIView, 
+    TicketRetrieveUpdateDestroyAPIView, 
+    TransferRequestCreateAPIView, 
+    TransferHistoryListAPIView
+)
 
 app_name = 'tickets'
 
 urlpatterns = [
-    path('', TicketListView.as_view(), name='list_tickets'),
-    path('view/<int:pk>/', TicketDetailView.as_view(), name='view_ticket'),
-    path('create/', TicketCreateView.as_view(), name='transfer_ticket'),
-    path('update/<int:pk>/', TicketUpdateView.as_view(), name='update_ticket'),
-    path('delete/<int:pk>/', TicketDeleteView.as_view(), name='delete_ticket'),
-    path('transfer/request/', TransferRequestCreateView.as_view(), name='request_transfer'),
-    path('transfer/history/', TransferHistoryView.as_view(), name='transfer_history'),
+    path('tickets/', TicketListCreateAPIView.as_view(), name='ticket-list-create'),
+    path('tickets/<int:pk>/', TicketRetrieveUpdateDestroyAPIView.as_view(), name='ticket-detail'),
+    path('transfer-requests/', TransferRequestCreateAPIView.as_view(), name='transfer-request-create'),
+    path('transfer-history/', TransferHistoryListAPIView.as_view(), name='transfer-history-list'),
 ]

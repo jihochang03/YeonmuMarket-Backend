@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+from django.db import models
+from django.contrib.auth.models import User
+
 class Ticket(models.Model):
     date = models.DateField(auto_now_add=True)
     seat = models.CharField(max_length=100, default="")
@@ -8,9 +11,11 @@ class Ticket(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     casting = models.CharField(max_length=100, default="")
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    file_upload = models.FileField(upload_to='ticket_files/', null=True, blank=True)  # New file upload field
 
     def __str__(self):
         return f"{self.date} - {self.seat}"
+
 
 class TransferHistory(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)
