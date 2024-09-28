@@ -14,6 +14,7 @@ class Ticket(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     casting = models.CharField(max_length=100, default='Not specified')
     uploaded_file = models.FileField(upload_to='tickets/', null=True, blank=True)
+    masked_file = models.FileField(upload_to='tickets/masked/', null=True, blank=True)  # 가려진 파일을 저장하는 필드
     
     STATUS_CHOICES = [
         ('transfer_pending', '양도 중'),
