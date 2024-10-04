@@ -12,7 +12,9 @@ import cv2
 # Tesseract 경로 설정
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+
 class Ticket(models.Model):
+    id = models.AutoField(primary_key=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
     transferee = models.ForeignKey(User, related_name="ticket_transferee", null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=100, default='Untitled Ticket')
@@ -169,3 +171,11 @@ def draw_bounding_box_no_color(image_path, output_path, width_scale=4):
             draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="black", fill="black", width=3)
 
     pil_image.save(output_path)
+
+
+class TicketPost(models.Model):
+    id = models.AutoField(primary_key=True)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE) # or one to one 
+ 
+    created_at = models.DateTimeField(auto_now_add=True)

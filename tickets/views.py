@@ -3,11 +3,11 @@ from rest_framework.views import APIView
 from drf_yasg import openapi
 from rest_framework import status
 from rest_framework.response import Response
-from .models import Ticket
-from .serializers import TicketSerializer
+from .models import Ticket, TicketPost
+from .serializers import TicketSerializer, TicketPostSerializer
 from drf_yasg.utils import swagger_auto_schema
 from django.db.models import Q
-from .request_serializers import TicketListRequestSerializer, TicketDetailRequestSerializer
+from .request_serializers import TicketPostListRequestSerializer, TicketPostDetailRequestSerializer
 from user.models import User
 from user.request_serializers import SignInRequestSerializer
 from django.http import JsonResponse
@@ -19,12 +19,30 @@ import re
 import os
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
-class TicketListView(APIView):
+
+class TicketView(APIView):
     @swagger_auto_schema(
-        operation_id="티켓 생성",
-        operation_description="티켓 양도글을 생성합니다.",
-        request_body=TicketListRequestSerializer,
+        operation_id="티켓 정보 조회",
+        operation_description="티켓 정보를 조회합니다.",
         responses={201: TicketSerializer, 404: "Not Found", 400: "Bad Request"},
+    )
+    def get(self, request):
+        try:
+            ticket_id = request.data.get("ticket_id")
+            ticket = Ticket.objects.get(id=ticket_id)
+            serializer = TicketSerializer(instance=ticket)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Ticket.DoesNotExist:
+            return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class TicketPostListView(APIView):
+    @swagger_auto_schema(
+        operation_id="티켓 양도글 생성",
+        operation_description="티켓 양도글을 생성합니다.",
+        request_body=TicketPostListRequestSerializer,
+        responses={201: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
     )
     def post(self, request):
         title = request.data.get("title")
@@ -54,8 +72,8 @@ class TicketListView(APIView):
 
         try:
             author = User.objects.get(username=username)
-            if not author.check_password(password):
-                return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+            # if not author.check_password(password):
+            #     return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Ticket 객체 생성
             ticket = Ticket.objects.create(
@@ -70,40 +88,49 @@ class TicketListView(APIView):
                 owner=author
             )
 
+            
+
             # 좌석 이미지 처리 및 저장
             if uploaded_seat_image:
                 ticket.save(keyword=keyword)  # save 호출 시 keyword로 좌석 이미지 처리
+            # TicketPost 객체 생성
+            ticket_post = TicketPost.objects.create(
+                ticket=ticket,
+                author=author
+            )
+            ticket_post.save()
 
         except User.DoesNotExist:
             return Response({"detail": "User Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = TicketSerializer(ticket)
+        serializer = TicketPostSerializer(ticket_post)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-class TicketDetailView(APIView):
+class TicketPostDetailView(APIView):
     @swagger_auto_schema(
-        operation_id="티켓 상세 조회",
-        operation_description="티켓 1개의 상세 정보를 조회합니다.",
-        responses={200: TicketSerializer, 400: "Bad Request"},
+        operation_id="양도글 상세 조회",
+        operation_description="양도글 1개의 상세 정보를 조회합니다.",
+        responses={200: TicketPostSerializer, 400: "Bad Request"},
     )
-    def get(self, request, ticket_id):
+    def get(self, request):
         try:
-            ticket = Ticket.objects.get(id=ticket_id)
-        except Ticket.DoesNotExist:
+            ticket_post_id = request.GET.get("ticket_post_id")
+            ticket_post = TicketPost.objects.get(id=ticket_post_id)
+        except TicketPost.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = TicketSerializer(instance=ticket)
+        serializer = TicketPostSerializer(instance=ticket_post)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
-        operation_id="티켓 삭제",
+        operation_id="티켓 양도글 삭제",
         operation_description="티켓 양도글을 삭제합니다.",
         request_body=SignInRequestSerializer,
         responses={204: "No Content", 404: "Not Found", 400: "Bad Request"},
     )
-    def delete(self, request, ticket_id):
+    def delete(self, request, ticket_post_id):
         try:
-            ticket = Ticket.objects.get(id=ticket_id)
+            ticket_post = TicketPost.objects.get(id=ticket_post_id)
         except Ticket.DoesNotExist:
             return Response({"detail": "Post Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -118,25 +145,27 @@ class TicketDetailView(APIView):
             author = User.objects.get(username=username)
             if not author.check_password(password):
                 return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
-            if ticket.owner != author:
+            if ticket_post.author != author:
                 return Response({"detail": "You are not the author of this post."}, status=status.HTTP_403_FORBIDDEN)
 
         except User.DoesNotExist:
             return Response({"detail": "User Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        ticket.delete()
+        # ticket - ticket_post를 one-to-one으로 한다면 ticket.delete()
+        # ticket -ticket_post를 one-to-many로 한다면 ticket_post.delete() 
+        ticket_post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @swagger_auto_schema(
-        operation_id="티켓 수정",
+        operation_id="티켓 양도글 수정",
         operation_description="티켓 양도글을 수정합니다.",
-        request_body=TicketDetailRequestSerializer,
-        responses={200: TicketSerializer, 404: "Not Found", 400: "Bad Request"},
+        request_body=TicketPostDetailRequestSerializer,
+        responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
     )
-    def put(self, request, ticket_id):
+    def put(self, request, ticket_post_id):
         try:
-            ticket = Ticket.objects.get(id=ticket_id)
-        except Ticket.DoesNotExist:
+            ticket_post = TicketPost.objects.get(id=ticket_post_id)
+        except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
         author_info = request.data.get("owner")
@@ -150,7 +179,7 @@ class TicketDetailView(APIView):
             author = User.objects.get(username=username)
             if not author.check_password(password):
                 return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
-            if ticket.owner != author:
+            if ticket_post.author != author:
                 return Response({"detail": "You are not the author of this post."}, status=status.HTTP_403_FORBIDDEN)
 
         except User.DoesNotExist:
@@ -170,18 +199,18 @@ class TicketDetailView(APIView):
             return Response({"detail": "Required fields missing."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 업데이트된 필드 적용
-        ticket.title = title
-        ticket.date = date
-        ticket.seat = seat
-        ticket.booking_details = booking_details
-        ticket.price = price
-        ticket.casting = casting
-        ticket.uploaded_file = uploaded_file
-        ticket.uploaded_seat_image = uploaded_seat_image
+        ticket_post.title = title
+        ticket_post.date = date
+        ticket_post.seat = seat
+        ticket_post.booking_details = booking_details
+        ticket_post.price = price
+        ticket_post.casting = casting
+        ticket_post.uploaded_file = uploaded_file
+        ticket_post.uploaded_seat_image = uploaded_seat_image
 
-        ticket.save(keyword=request.data.get('keyword', None))  # 좌석 이미지 처리
+        ticket_post.save(keyword=request.data.get('keyword', None))  # 좌석 이미지 처리
 
-        serializer = TicketSerializer(instance=ticket)
+        serializer = TicketPostSerializer(instance=ticket_post)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class TransferListView(APIView):
