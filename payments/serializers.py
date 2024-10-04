@@ -1,12 +1,8 @@
 from rest_framework import serializers
-from .models import Account, AccountVerification
+from .models import Account
 
 class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
-        fields = ['id', 'account_number', 'bank_name', 'is_verified']
+        fields = ['id', 'bank_account', 'bank_name']
 
-class AccountVerificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AccountVerification
-        fields = ['id', 'account', 'verification_code']

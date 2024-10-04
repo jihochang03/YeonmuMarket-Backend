@@ -59,9 +59,6 @@ class TransferIntentView(APIView):
             transferor_profile = UserProfile.objects.get(user=conversation.owner)
             ticket = conversation.ticket
 
-            # 포인트 업데이트
-            transferee_profile.remaining_points -= ticket.price
-            transferor_profile.remaining_points += ticket.price
             transferee_profile.save()
             transferor_profile.save()
 
