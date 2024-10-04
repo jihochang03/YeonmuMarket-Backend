@@ -25,7 +25,6 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('api/payments/', include('payments.urls')),  # payments 앱 URL 연결
-    path('api/point/', include('Point.urls')),
     path('api/conversations/', include('conversations.urls')),  # conversations 앱 URL 연결
 ]
 # 개발 중 미디어 파일 서빙 설정

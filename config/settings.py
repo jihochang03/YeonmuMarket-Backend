@@ -33,6 +33,10 @@ KAKAO_KEY=env('KAKAO_KEY')
 KAKAO_REDIRECT_URI = 'http://127.0.0.1:8000/kakao/callback/'
 DATABASE_PASSWORD=env('DATABASE_PASSWORD')
 
+OPEN_BANKING_API_BASE_URL = 'https://testapi.openbanking.or.kr'
+OPEN_BANKING_CLIENT_ID = env('OPEN_BANKING_CLIENT_ID')
+OPEN_BANKING_CLIENT_SECRET = env('OPEN_BANKING_CLIENT_SECRET')
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 SITE_ID = 1
@@ -60,7 +64,6 @@ INSTALLED_APPS = [
     'drf_yasg',
     'conversations',
     'payments',
-    'Point',
 ]
 
 MIDDLEWARE = [

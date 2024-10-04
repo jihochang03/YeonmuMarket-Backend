@@ -82,64 +82,6 @@ class SignOutView(APIView):
         RefreshToken(refresh_token).blacklist()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
-class RemainingPointDeductView(APIView):
-    @swagger_auto_schema(
-        operation_id="포인트 차감",
-        operation_description="유저가 사주 상세 정보를 구매할 때, 보유 포인트를 차감합니다.",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                "point_to_deduct": openapi.Schema(
-                    type=openapi.TYPE_INTEGER,
-                    description="차감할 포인트",
-                )
-            },
-        ),
-        responses={200: UserProfileSerializer, 400: "point_to_deduct field missing.", 401: "please signin", 404: "UserProfile Not found."},
-        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
-    )
-    def put(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            user_profile = UserProfile.objects.get(user=user)
-            remaining_points = user_profile.remaining_points
-            point_to_deduct = request.data.get("point_to_deduct")
-            if not point_to_deduct:
-                return Response({"detail": "point_to_deduct field missing."}, status=status.HTTP_400_BAD_REQUEST)
-            if remaining_points < point_to_deduct:
-                return Response({"detail": "Not enough points."}, status=status.HTTP_400_BAD_REQUEST)
-            user_profile.remaining_points -= point_to_deduct
-            user_profile.save()
-            serializer = UserProfileSerializer(user_profile)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except UserProfile.DoesNotExist:
-            return Response({"detail": "UserProfile Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-class RemainingPointAddView(APIView):
-    @swagger_auto_schema(
-        operation_id="포인트 추가",
-        operation_description="유저가 포인트를 추가합니다. 추가할 포인트는 양의 정수여야 합니다.",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                "point_to_add": openapi.Schema(
-                    type=openapi.TYPE_INTEGER,
-                    description="추가할 포인트. 양의 정수만 가능합니다.",
-                )
-            },
-        ),
-        responses={200: UserProfileSerializer, 400: "point_to_add field missing 또는 잘못된 값.", 401: "로그인 필요", 404: "UserProfile Not found."},
-        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
-    )
-    def put(self, request):
-        # 함수 내부에서 추가된 포인트가 유효한지 체크
-        point_to_add = request.data.get("point_to_add")
-        if point_to_add is None or point_to_add <= 0:
-            return Response({"detail": "추가할 포인트는 양의 정수여야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
-
 class UserProfileListView(APIView):
     @swagger_auto_schema(
         operation_id="유저 정보 확인",
@@ -222,6 +164,26 @@ class CheckUsernameView(APIView):
         return Response({"message": "Username is available"}, status=status.HTTP_200_OK)
 
 class KakaoSignInCallbackView(APIView):
+    @swagger_auto_schema(
+        operation_description="Kakao social login callback API. Takes a code from the frontend and exchanges it for an access token.",
+        manual_parameters=[
+            openapi.Parameter(
+                'code', openapi.IN_QUERY, description="Authorization code from Kakao", type=openapi.TYPE_STRING
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Kakao login successful",
+                examples={
+                    "application/json": {
+                        "message": "Login successful",
+                        "redirect_url": "/home/"
+                    }
+                }
+            ),
+            400: openapi.Response(description="Invalid code or failed request"),
+        }
+    )
     def post(self, request):
         # 프론트에서 전달된 code로 카카오에서 access_token 요청
         code = request.GET.get("code")  # 나중에 request.body로 변경 가능
