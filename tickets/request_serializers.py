@@ -3,7 +3,7 @@ from rest_framework import serializers
 from user.request_serializers import SignInRequestSerializer
 
 
-class TicketListRequestSerializer(serializers.Serializer):
+class TicketPostListRequestSerializer(serializers.Serializer):
     owner = SignInRequestSerializer()
     title = serializers.CharField()
     description = serializers.CharField()  # 티켓 설명
@@ -14,7 +14,7 @@ class TicketListRequestSerializer(serializers.Serializer):
     casting = serializers.CharField(max_length=100)  # 캐스팅 정보
     uploaded_file = serializers.FileField(required=True, allow_null=True)  # 파일 업로드
 
-class TicketDetailRequestSerializer(serializers.Serializer):
+class TicketPostDetailRequestSerializer(serializers.Serializer):
     owner = SignInRequestSerializer()
     title = serializers.CharField()
     description = serializers.CharField()  # 티켓 설명
