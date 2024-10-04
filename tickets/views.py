@@ -19,6 +19,24 @@ import re
 import os
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
+
+class TicketView(APIView):
+    @swagger_auto_schema(
+        operation_id="티켓 정보 조회",
+        operation_description="티켓 정보를 조회합니다.",
+        responses={201: TicketSerializer, 404: "Not Found", 400: "Bad Request"},
+    )
+    def get(self, request):
+        try:
+            ticket_id = request.data.get("ticket_id")
+            ticket = Ticket.objects.get(id=ticket_id)
+            serializer = TicketSerializer(instance=ticket)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Ticket.DoesNotExist:
+            return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class TicketListView(APIView):
     @swagger_auto_schema(
         operation_id="티켓 생성",
