@@ -16,7 +16,6 @@ class Ticket(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
     transferee = models.ForeignKey(User, related_name="ticket_transferee", null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=100, default='Untitled Ticket')
-    description = models.CharField(max_length=255, blank=True, default='No description available')
     date = models.DateField(default=date.today)
     seat = models.CharField(max_length=50, default='General Admission')
     booking_details = models.CharField(max_length=100, default='No discounts applied')
