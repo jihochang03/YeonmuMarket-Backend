@@ -244,7 +244,7 @@ class KakaoSignInCallbackView(APIView):
             return Response({"redirect_url": "/home/"}, status=status.HTTP_200_OK)
         else:
             # 계좌가 등록되지 않은 경우 계좌 등록 페이지로 리다이렉트
-            return Response({"redirect_url": "/account-register/"}, status=status.HTTP_200_OK)
+            return Response({"redirect_url": "api/payments/register/"}, status=status.HTTP_200_OK)
 
         # 로그인이 완료되면 토큰을 설정하여 응답에 포함 (JWT나 세션 기반)
         return set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)
