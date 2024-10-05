@@ -128,7 +128,7 @@ DATABASES = {
         'NAME': 'yeonmumarketdb',          # The name of your PostgreSQL database
         'USER': 'admin',           # Your PostgreSQL username
         'PASSWORD': DATABASE_PASSWORD,      # Your PostgreSQL password
-        'HOST': 'localhost',              # Or use an IP if your DB is hosted elsewhere
+        'HOST': '172.18.48.11',              # Or use an IP if your DB is hosted elsewhere
         'PORT': '5432',                   # Default PostgreSQL port
     }
 

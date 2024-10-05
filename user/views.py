@@ -184,25 +184,33 @@ class KakaoSignInCallbackView(APIView):
             400: openapi.Response(description="Invalid code or failed request"),
         }
     )
-    def post(self, request):
-        # 프론트에서 전달된 code로 카카오에서 access_token 요청
-        code = request.GET.get("code")  # 나중에 request.body로 변경 가능
+    def get(self, request):
+        # 프론트에서 GET 요청으로 전달된 code를 수신
+        code = request.GET.get("code")  # GET 요청에서 "code" 수신
 
-        # 카카오로부터 access_token을 요청
+        if not code:
+            return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 카카오로부터 access_token 요청
         token_url = (
-            f"https://kauth.kakao.com/oauth/token?"
-            f"grant_type=authorization_code&client_id={kakao_secret}&"
+            f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={kakao_secret}&"
             f"redirect_uri={kakao_redirect_uri}&code={code}"
         )
         token_response = requests.post(token_url)
         access_token = token_response.json().get("access_token")
 
-        # access_token으로 카카오 유저 정보를 요청
+        if not access_token:
+            return Response({"error": "Failed to retrieve access token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # access_token으로 카카오 유저 정보 요청
         user_info_response = requests.get(
             "https://kapi.kakao.com/v2/user/me",
             headers={"Authorization": f"Bearer {access_token}"},
         )
         user_info = user_info_response.json()
+
+        if 'id' not in user_info:
+            return Response({"error": "Failed to retrieve user information"}, status=status.HTTP_400_BAD_REQUEST)
 
         kakao_id = user_info.get("id")
         kakao_email = user_info.get("kakao_account").get("email")
@@ -218,29 +226,25 @@ class KakaoSignInCallbackView(APIView):
             }
             user_serializer = UserSerializer(data=user_data)
             if user_serializer.is_valid(raise_exception=True):
-                # 비밀번호를 해시화한 후 저장
                 user_serializer.validated_data["password"] = make_password(
                     user_serializer.validated_data["password"]
                 )
                 user = user_serializer.save()
 
-            # 새로 생성된 유저 프로필 저장
+            # UserProfile 생성
             UserProfile.objects.create(
                 user=user,
-                #is_social_login=True,
                 kakao_email=kakao_email,
                 kakao_token=access_token,  # access_token 저장
             )
 
-            user_profile = UserProfile.objects.get(user=user)
-
-            # 계좌 등록 여부에 따라 리다이렉트
-            if user_profile.is_payment_verified:
+        user_profile = UserProfile.objects.get(user=user)
+        if user_profile.is_payment_verified:
             # 계좌가 등록된 경우 홈으로 리다이렉트
-                return redirect('home')
-            else:
+            return Response({"redirect_url": "/home/"}, status=status.HTTP_200_OK)
+        else:
             # 계좌가 등록되지 않은 경우 계좌 등록 페이지로 리다이렉트
-                return redirect('account-register')
+            return Response({"redirect_url": "/account-register/"}, status=status.HTTP_200_OK)
 
         # 로그인이 완료되면 토큰을 설정하여 응답에 포함 (JWT나 세션 기반)
         return set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)
