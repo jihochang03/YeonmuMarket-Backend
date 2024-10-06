@@ -255,6 +255,7 @@ class ReceivedListView(APIView):
 
         received_serializer = TicketSerializer(received_list, many=True)
         return Response(received_serializer.data, status=status.HTTP_200_OK)
+    
 # Tesseract 경로 설정 (윈도우 경로 설정)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
