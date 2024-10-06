@@ -17,17 +17,32 @@ class JoinConversationView(APIView):
         }
     )
     def post(self, request, ticket_id):
-        ticket = Ticket.objects.get(id=ticket_id)
-        conversation = Conversation.objects.get(ticket=ticket)
-        user = request.user
+        try:
+            ticket = Ticket.objects.get(id=ticket_id)
+            conversation = Conversation.objects.get(ticket=ticket)
+            user = request.user
 
-        if not conversation.can_join(user):
-            return Response({"detail": "Conversation full or already joined."}, status=status.HTTP_403_FORBIDDEN)
-        
-        conversation.transferee = user
-        conversation.save()
+            # Allow transferee to join if they are already in the conversation
+            if not conversation.can_join_new(user):
+                if not conversation.can_join_old(user):
+                    return Response({"detail": "Conversation full or already joined."}, status=status.HTTP_403_FORBIDDEN)
+            
+            if conversation.can_join_new(user):
+                conversation.transferee = user
+                conversation.save()
+                # Return masked file and seat image for the transferee
+                return Response({
+                    "detail": "You have joined the conversation.",
+                    "masked_file": ticket.masked_file.url if ticket.masked_file else None,
+                    "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
+                }, status=status.HTTP_200_OK)
 
-        return Response({"detail": "You have joined the conversation."}, status=status.HTTP_200_OK)
+            return Response({"detail": "You have joined the conversation."}, status=status.HTTP_200_OK)
+
+        except Ticket.DoesNotExist:
+            return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Conversation.DoesNotExist:
+            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
 class TransferIntentView(APIView):
     @swagger_auto_schema(
@@ -41,40 +56,80 @@ class TransferIntentView(APIView):
         }
     )
     def post(self, request, conversation_id):
-        conversation = Conversation.objects.get(id=conversation_id)
-        user = request.user
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+            user = request.user
 
-        if user == conversation.owner:
-            conversation.is_transfer_intent = True
-        elif user == conversation.transferee:
-            # Check if the transferee has enough points
-            if not conversation.check_sufficient_points():
-                return Response({"detail": "Insufficient points to complete the transaction."}, status=status.HTTP_400_BAD_REQUEST)
-            conversation.is_acceptance_intent = True
-        else:
-            return Response({"detail": "Invalid user."}, status=status.HTTP_403_FORBIDDEN)
+            if user == conversation.owner:
+                conversation.is_transfer_intent = True
+            elif user == conversation.transferee:
+                conversation.is_acceptance_intent = True
+            else:
+                return Response({"detail": "Invalid user."}, status=status.HTTP_403_FORBIDDEN)
 
-        if conversation.transfer_complete():
+            # If both transfer and acceptance intent are marked, process the transfer completion
+            if conversation.transfer_complete():
+                # Fetch the owner's UserProfile
+                transferor_profile = UserProfile.objects.get(user=conversation.owner)
+
+                # Return the bank account and bank name from the owner's UserProfile
+                return Response({
+                    "detail": "Transfer completed.",
+                    "bank_account": transferor_profile.bank_account,
+                    "bank_name": transferor_profile.bank_name
+                }, status=status.HTTP_200_OK)
+
+            conversation.save()
+            return Response({"detail": "Intent marked."}, status=status.HTTP_200_OK)
+
+        except Conversation.DoesNotExist:
+            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+class TransferCompleteView(APIView):
+    @swagger_auto_schema(
+        operation_id="양도 완료 처리",
+        operation_description="양도 절차가 완료되면 티켓 상태를 변경하고, 양도자와 양수자의 프로필을 업데이트합니다.",
+        responses={
+            200: "Transfer completed.",
+            404: "Conversation or profiles not found.",
+            400: "Invalid state for transfer completion."
+        }
+    )
+    def post(self, request, conversation_id):
+        try:
+            # Get the conversation based on the provided ID
+            conversation = Conversation.objects.get(id=conversation_id)
+
+            # Retrieve profiles of transferee and owner (transferor)
             transferee_profile = UserProfile.objects.get(user=conversation.transferee)
             transferor_profile = UserProfile.objects.get(user=conversation.owner)
+            
+            # Get the ticket related to this conversation
             ticket = conversation.ticket
 
+            # Save the profiles to ensure any relevant changes (if needed) are persisted
             transferee_profile.save()
             transferor_profile.save()
 
-            # 티켓 상태 변경
+            # Update ticket status based on the ownership of the ticket
             ticket.status = 'transfer_completed' if ticket.owner == transferor_profile.user else 'received_completed'
             ticket.save()
 
-            phone_last_digits = transferor_profile.phone_number[-4:]
+            # Get the last 4 digits of the transferor's phone number
+            phone_last_digits = transferor_profile.phone_last_digits
+
+            # Return the details, including ticket file and phone number
             return Response({
                 "detail": "Transfer completed.",
                 "ticket_file": ticket.uploaded_file.url,
                 "phone_number": phone_last_digits
             }, status=status.HTTP_200_OK)
 
-        conversation.save()
-        return Response({"detail": "Intent marked."}, status=status.HTTP_200_OK)
+        except Conversation.DoesNotExist:
+            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+        except UserProfile.DoesNotExist:
+            return Response({"detail": "User profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 class LeaveConversationView(APIView):
     @swagger_auto_schema(
         operation_id="대화방 나가기",

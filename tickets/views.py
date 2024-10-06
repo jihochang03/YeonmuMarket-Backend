@@ -19,6 +19,7 @@ import re
 import os
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
+from conversations.models import Conversation  # Import Conversation model
 
 class TicketView(APIView):
     @swagger_auto_schema(
@@ -36,6 +37,7 @@ class TicketView(APIView):
             return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class TicketPostListView(APIView):
     @swagger_auto_schema(
@@ -72,8 +74,6 @@ class TicketPostListView(APIView):
 
         try:
             author = User.objects.get(username=username)
-            # if not author.check_password(password):
-            #     return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Ticket 객체 생성
             ticket = Ticket.objects.create(
@@ -88,11 +88,17 @@ class TicketPostListView(APIView):
                 owner=author
             )
 
-            
-
             # 좌석 이미지 처리 및 저장
             if uploaded_seat_image:
                 ticket.save(keyword=keyword)  # save 호출 시 keyword로 좌석 이미지 처리
+
+            # Create a conversation for the newly created ticket
+            conversation = Conversation.objects.create(
+                ticket=ticket,
+                owner=author,
+                transferee=None  # Start with no transferee
+            )
+
             # TicketPost 객체 생성
             ticket_post = TicketPost.objects.create(
                 ticket=ticket,
@@ -241,7 +247,7 @@ class ReceivedListView(APIView):
     def get(self, request):
         user = request.user
         received_list = Ticket.objects.filter(
-            transferee=user, status__in=['transfer_pending', 'received_completed']
+            transferee=user, status__in=['transfer_pending', 'transfer_completed']
         ).order_by('-id')
 
         if not received_list.exists():
