@@ -1,7 +1,0 @@
-<form
-  action="{% url 'verify_bank_account' bank_account_id=bank_account.id %}"
-  method="post"
->
-  {% csrf_token %} {{ form.as_p }}
-  <button type="submit">Verify Account</button>
-</form>
