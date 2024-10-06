@@ -26,12 +26,12 @@ class Ticket(models.Model):
     uploaded_file = models.FileField(upload_to='tickets/', null=True, blank=True)
     masked_file = models.FileField(upload_to='tickets/masked/', null=True, blank=True)  # 가려진 파일을 저장하는 필드
     uploaded_seat_image = models.FileField(upload_to='tickets/seats/', null=True, blank=True)  # 좌석 사진 저장
-    processed_seat_image = models.FileField(upload_to='tickets/seats/processed/', null=True, blank=True)  # 처리된 좌석 사진 저장
+    processed_seat_image = models.FileField(upload_to='tickets/seats/processed/', null=True, blank=True) # 처리된 좌석 사진 저장
+    phone_last_digits = models.CharField(max_length=4, blank=True, null=True) 
     
     STATUS_CHOICES = [
         ('transfer_pending', '양도 중'),
         ('transfer_completed', '양도 완료'),
-        ('received_completed', '양수 완료'),
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='transfer_pending')
     

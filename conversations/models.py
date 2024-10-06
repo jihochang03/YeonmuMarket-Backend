@@ -12,10 +12,14 @@ class Conversation(models.Model):
     is_transfer_intent = models.BooleanField(default=False)
     is_acceptance_intent = models.BooleanField(default=False)
 
-    def can_join(self, user):
-        """Only allow new transferee if there's no transferee and the user is not the owner"""
-        return self.transferee is None and user != self.owner
-
+    def can_join_new(self, user):
+        """Allow user to join only if there's no transferee or if the user is already the transferee"""
+        return (self.transferee is None and user != self.owner )
+    
+    def can_join_old(self, user):
+        """Allow user to join only if there's no transferee or if the user is already the transferee"""
+        return (self.transferee == user or user == self.owner )
+    
     def reset_transferee(self):
         """Reset the transferee and transfer intent"""
         self.transferee = None
