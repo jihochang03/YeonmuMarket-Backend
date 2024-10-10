@@ -23,6 +23,7 @@ class Ticket(models.Model):
     booking_details = models.CharField(max_length=100, default='No discounts applied')
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     casting = models.CharField(max_length=100, default='Not specified')
+    keyword = models.CharField(max_length=100, default="인터파크")
     uploaded_file = models.FileField(upload_to='tickets/', null=True, blank=True)
     masked_file = models.FileField(upload_to='tickets/masked/', null=True, blank=True)  # 가려진 파일을 저장하는 필드
     uploaded_seat_image = models.FileField(upload_to='tickets/seats/', null=True, blank=True)  # 좌석 사진 저장

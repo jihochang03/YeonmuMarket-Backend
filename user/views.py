@@ -164,48 +164,25 @@ class CheckUsernameView(APIView):
         return Response({"message": "Username is available"}, status=status.HTTP_200_OK)
 
 class KakaoSignInCallbackView(APIView):
-    @swagger_auto_schema(
-        operation_description="Kakao social login callback API. Takes a code from the frontend and exchanges it for an access token.",
-        manual_parameters=[
-            openapi.Parameter(
-                'code', openapi.IN_QUERY, description="Authorization code from Kakao", type=openapi.TYPE_STRING
-            )
-        ],
-        responses={
-            200: openapi.Response(
-                description="Kakao login successful",
-                examples={
-                    "application/json": {
-                        "message": "Login successful",
-                        "redirect_url": "/home/"
-                    }
-                }
-            ),
-            400: openapi.Response(description="Invalid code or failed request"),
-        }
-    )
     def get(self, request):
-        # 프론트에서 GET 요청으로 전달된 code를 수신
-        code = request.GET.get("code")  # GET 요청에서 "code" 수신
+        code = request.GET.get("code")
+        state = request.GET.get("state")  # Get the state parameter (which will be the URL to redirect to)
 
         if not code:
             return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 카카오로부터 access_token 요청
-        token_url = (
-            f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={kakao_secret}&"
-            f"redirect_uri={kakao_redirect_uri}&code={code}"
-        )
+        # Request access token from Kakao using the authorization code
+        token_url = f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={kakao_secret}&redirect_uri={kakao_redirect_uri}&code={code}"
         token_response = requests.post(token_url)
         access_token = token_response.json().get("access_token")
 
         if not access_token:
             return Response({"error": "Failed to retrieve access token"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # access_token으로 카카오 유저 정보 요청
+        # Use access_token to request user info
         user_info_response = requests.get(
             "https://kapi.kakao.com/v2/user/me",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={"Authorization": f"Bearer {access_token}"}
         )
         user_info = user_info_response.json()
 
@@ -216,35 +193,31 @@ class KakaoSignInCallbackView(APIView):
         kakao_email = user_info.get("kakao_account").get("email")
 
         try:
-            # 유저가 존재하는지 확인
+            # Check if user exists
             user = User.objects.get(username=kakao_id)
         except User.DoesNotExist:
-            # 유저가 존재하지 않으면 생성
+            # Create new user if not exist
             user_data = {
                 "username": kakao_id,
                 "password": "social_login_password",
             }
             user_serializer = UserSerializer(data=user_data)
             if user_serializer.is_valid(raise_exception=True):
-                user_serializer.validated_data["password"] = make_password(
-                    user_serializer.validated_data["password"]
-                )
+                user_serializer.validated_data["password"] = make_password(user_serializer.validated_data["password"])
                 user = user_serializer.save()
 
-            # UserProfile 생성
+            # Create user profile
             UserProfile.objects.create(
                 user=user,
                 kakao_email=kakao_email,
-                kakao_token=access_token,  # access_token 저장
+                kakao_token=access_token
             )
 
         user_profile = UserProfile.objects.get(user=user)
-        if user_profile.is_payment_verified:
-            # 계좌가 등록된 경우 홈으로 리다이렉트
-            return Response({"redirect_url": "/home/"}, status=status.HTTP_200_OK)
-        else:
-            # 계좌가 등록되지 않은 경우 계좌 등록 페이지로 리다이렉트
-            return Response({"redirect_url": "api/payments/register/"}, status=status.HTTP_200_OK)
 
-        # 로그인이 완료되면 토큰을 설정하여 응답에 포함 (JWT나 세션 기반)
-        return set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)
+        if user_profile.is_payment_verified:
+            # Redirect to the state page (in this case, always http://localhost:5173/main)
+            return  redirect("http://localhost:5173/main")
+        else:
+            # Redirect to account registration page if payment is not verified
+            return redirect("/api/payments/register/")

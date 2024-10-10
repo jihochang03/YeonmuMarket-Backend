@@ -20,7 +20,7 @@ import os
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from conversations.models import Conversation  # Import Conversation model
-
+from user.models import UserProfile
 class TicketView(APIView):
     @swagger_auto_schema(
         operation_id="티켓 정보 조회",
@@ -47,67 +47,69 @@ class TicketPostListView(APIView):
         responses={201: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
     )
     def post(self, request):
+        user = request.user
+        print(f"--------{user}" )
+        if request.user.is_anonymous:
+            return Response({"detail": "인증되지 않은 사용자입니다. 로그인 후 시도해주세요."}, status=status.HTTP_401_UNAUTHORIZED)
+
         title = request.data.get("title")
         date = request.data.get("date")
         seat = request.data.get("seat")
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
         casting = request.data.get("casting")
-        uploaded_file = request.data.get("uploaded_file")
-        uploaded_seat_image = request.data.get("uploaded_seat_image")
-        keyword = request.data.get("keyword")  # keyword 추가
-        owner_info = request.data.get("owner")
+        uploaded_file = request.FILES.get("uploaded_file")
+        uploaded_seat_image = request.FILES.get("uploaded_seat_image")
+        keyword = request.data.get("keyword")
+        phone_last_digits = request.data.get("phone_last_digits")
 
-        if not owner_info:
-            return Response({"detail": "owner field missing."}, status=status.HTTP_400_BAD_REQUEST)
-
-        username = owner_info.get("username")
-        password = owner_info.get("password")
-
-        if not username or not password:
-            return Response(
-                {"detail": "[username, password] fields missing in owner"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not title or not date or not seat or not price or not casting:
-            return Response({"detail": "content fields missing."}, status=status.HTTP_400_BAD_REQUEST)
+        # 현재 로그인된 사용자 가져오기
+        user = request.user
+        print(--------{user} )
 
         try:
-            author = User.objects.get(username=username)
+            user_profile = UserProfile.objects.get(user=user)
+        except UserProfile.DoesNotExist:
+            return Response({"detail": "해당 유저의 프로필이 존재하지 않습니다."}, status=status.HTTP_404_NOT_FOUND)
 
+        # 필수 필드가 있는지 확인
+        if not title or not date or not seat or not price or not casting:
+            return Response({"detail": "필수 항목이 누락되었습니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
             # Ticket 객체 생성
             ticket = Ticket.objects.create(
-                title=title, 
-                date=date, 
-                seat=seat, 
-                booking_details=booking_details, 
-                price=price, 
-                casting=casting, 
-                uploaded_file=uploaded_file, 
+                title=title,
+                date=date,
+                seat=seat,
+                booking_details=booking_details,
+                price=price,
+                casting=casting,
+                uploaded_file=uploaded_file,
                 uploaded_seat_image=uploaded_seat_image,
-                owner=author
+                phone_last_digits=phone_last_digits,  # 전화번호 마지막 4자리 저장
+                owner=user,  # 현재 로그인된 사용자
             )
 
-            # 좌석 이미지 처리 및 저장
             if uploaded_seat_image:
-                ticket.save(keyword=keyword)  # save 호출 시 keyword로 좌석 이미지 처리
+                ticket.save(keyword=keyword)
 
-            # Create a conversation for the newly created ticket
+            # 티켓과 관련된 대화 생성
             conversation = Conversation.objects.create(
                 ticket=ticket,
-                owner=author,
-                transferee=None  # Start with no transferee
+                owner=user,
+                transferee=None  # 양도자가 아직 없음
             )
 
             # TicketPost 객체 생성
             ticket_post = TicketPost.objects.create(
                 ticket=ticket,
-                author=author
+                author=user
             )
             ticket_post.save()
 
-        except User.DoesNotExist:
-            return Response({"detail": "User Not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": f"오류 발생: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = TicketPostSerializer(ticket_post)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

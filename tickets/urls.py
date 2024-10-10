@@ -10,7 +10,7 @@ from .views import process_image
 app_name = 'tickets'
 
 urlpatterns = [
-    path('', TicketPostListView.as_view()),
+    path('create/', TicketPostListView.as_view()),
     path('<int:pk>/', TicketPostDetailView.as_view()),
     path('transferred/', TransferListView.as_view(), name='transferred-tickets'),
     path('received/', ReceivedListView.as_view(), name='received-tickets'),
