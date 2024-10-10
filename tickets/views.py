@@ -256,6 +256,10 @@ class ReceivedListView(APIView):
         received_serializer = TicketSerializer(received_list, many=True)
         return Response(received_serializer.data, status=status.HTTP_200_OK)
     
+import logging
+
+logger = logging.getLogger(__name__)
+    
 # Tesseract 경로 설정 (윈도우 경로 설정)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -272,65 +276,78 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 def process_image(request):
-    # 1. 입력어 확인
-    keyword = request.POST.get('keyword', '').strip()
+    try:
+        # Ensure keyword and both files are present
+        keyword = request.POST.get('keyword', '').strip()
+        print(keyword)
 
-    # 2. 파일 확인 및 처리
-    if request.method == 'POST' and request.FILES.get('file'):
-        file = request.FILES['file']
-        file_path = default_storage.save(f'uploads/{file.name}', file)
-        file_full_path = os.path.join(default_storage.location, file_path)
+        if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
+            return Response({"status": "error", "message": "Both files are required."}, status=400)
 
-        # 이미지 열기 및 처리
-        image = Image.open(file_full_path)
+        # Handle reservation image
+        reserv_image = request.FILES['reservImage']
+        reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
+        reserv_file_full_path = os.path.join(default_storage.location, reserv_file_path)
+
+        # Handle seat image
+        seat_image = request.FILES['seatImage']
+        seat_file_path = default_storage.save(f'uploads/{seat_image.name}', seat_image)
+        seat_file_full_path = os.path.join(default_storage.location, seat_file_path)
+
+        # Process reservation image using pytesseract
+        image = Image.open(reserv_file_full_path)
         extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
 
-        # 3. 입력어에 따른 분기 처리
+        # Depending on the keyword, process the image data
         if keyword == '인터파크':
-            return process_interpark_data(extracted_text)
+            # Process Interpark related data
+            response_data = process_interpark_data(extracted_text)
+            print(response_data)
+            return JsonResponse(response_data, status=200)
         elif keyword == '예스24':
-            return process_yes24_data(extracted_text)
+            # Process Yes24 related data
+            response_data = process_yes24_data(extracted_text)
+            print(response_data)
+            if not isinstance(response_data, dict):  # Ensure it's a dictionary
+                print("Invalid response_data format")
+            return JsonResponse(response_data, status=200, safe=False)
         elif keyword == '티켓링크':
-            return process_link_data(extracted_text)
+            # Process Ticketlink related data
+            response_data = process_link_data
+            if not isinstance(response_data, dict):  # Ensure it's a dictionary
+                print("Invalid response_data format")
+            return JsonResponse(response_data, status=200)
         else:
-            return JsonResponse({
-        "status": "fail",
-        "reservation_status": "",
-        "date_info": "",
-        "ticket_number": "",
-        "cast_info": "",
-        "total_amount": "",
-        "price_grade": "",
-        "seat_number": "",
-        "place": "",
-    })
+            return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
-    return JsonResponse({"status": "error", "message": "파일이 업로드되지 않았습니다."})
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=500)
 
 def process_link_data(extracted_text):
     try:
         reservation_status = check_reservation_status(extracted_text)
         date_info = extract_viewing_info_link(extracted_text)
         ticket_number = extract_ticket_number_link(extracted_text)
-        #cast_info = extract_cast(extracted_text)
+        # cast_info = extract_cast(extracted_text)
         total_amount = extract_total_amount(extracted_text)
         price_grade = extract_discount_info(extracted_text)
         seat_number = extract_line_with_yeol_and_beon(extracted_text)
         place = extract_line_after_at_link(extracted_text)
 
-        return JsonResponse({
+        # 딕셔너리로 반환
+        return {
             "status": "success",
             "reservation_status": reservation_status,
             "date_info": date_info,
             "ticket_number": ticket_number,
-            #"cast_info": cast_info,
+            # "cast_info": cast_info,
             "total_amount": total_amount,
             "price_grade": price_grade,
             "seat_number": seat_number,
             "place": place,
-        })
+        }
     except ValueError as e:
-        return JsonResponse({"status": "error", "message": str(e)})
+        return {"status": "error", "message": str(e)}
     
 def extract_line_with_yeol_and_beon(text):
     # 텍스트를 줄 단위로 분리
@@ -421,7 +438,7 @@ def process_interpark_data(extracted_text):
         seat_number = extract_seat_number(extracted_text)
         place = extract_line_after_at(extracted_text)
 
-        return JsonResponse({
+        return {
             "status": "success",
             "reservation_status": reservation_status,
             "date_info": date_info,
@@ -431,7 +448,7 @@ def process_interpark_data(extracted_text):
             "price_grade": price_grade,
             "seat_number": seat_number,
             "place": place,
-        })
+        }
 
     except ValueError as e:
         return JsonResponse({"status": "error", "message": str(e)})
@@ -551,7 +568,7 @@ def process_yes24_data(extracted_text):
         seat_number = extract_seat_number_yes24(extracted_text)
         place = extract_line_after_at_yes24(extracted_text)
 
-        return JsonResponse({
+        return {
             "status": "success",
             #"reservation_status": reservation_status,
             "date_info": date_info,
@@ -560,7 +577,7 @@ def process_yes24_data(extracted_text):
             "price_grade": price_grade,
             "seat_number": seat_number,
             "place": place,
-        })
+        }
 
     except ValueError as e:
         return JsonResponse({"status": "error", "message": str(e)})
