@@ -21,7 +21,7 @@ class Ticket(models.Model):
     date = models.DateField(default=date.today)
     seat = models.CharField(max_length=50, default='General Admission')
     booking_details = models.CharField(max_length=100, default='No discounts applied')
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    price = models.DecimalField(max_digits=10, decimal_places=0, default=0)
     casting = models.CharField(max_length=100, default='Not specified')
     keyword = models.CharField(max_length=100, default="인터파크")
     uploaded_file = models.FileField(upload_to='tickets/', null=True, blank=True)
@@ -31,6 +31,7 @@ class Ticket(models.Model):
     phone_last_digits = models.CharField(max_length=4, blank=True, null=True) 
     
     STATUS_CHOICES = [
+        ('waiting', '양수자 대기'),
         ('transfer_pending', '양도 중'),
         ('transfer_completed', '양도 완료'),
     ]
