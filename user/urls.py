@@ -2,7 +2,7 @@
 from django.urls import path
 from .views import KakaoSignInCallbackView, SignOutView, TokenRefreshView,  KakaoLoginView, UserProfileListView, UserProfileDetailView, CheckUsernameView
 
-app_name = "UserProfile"
+app_name = "user"
 urlpatterns = [
     path("signout/", SignOutView.as_view()),
     path("refresh/", TokenRefreshView.as_view()),

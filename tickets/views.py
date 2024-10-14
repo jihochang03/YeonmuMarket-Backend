@@ -20,7 +20,7 @@ import os
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from conversations.models import Conversation  # Import Conversation model
-
+from user.models import UserProfile
 class TicketView(APIView):
     @swagger_auto_schema(
         operation_id="티켓 정보 조회",
@@ -38,7 +38,6 @@ class TicketView(APIView):
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
 class TicketPostListView(APIView):
     @swagger_auto_schema(
         operation_id="티켓 양도글 생성",
@@ -47,70 +46,78 @@ class TicketPostListView(APIView):
         responses={201: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
     )
     def post(self, request):
+        user = request.user
+        print(f"-------- User: {user}" )  # 유저 정보 출력
+        if user.is_anonymous:
+            return Response({"detail": "인증되지 않은 사용자입니다. 로그인 후 시도해주세요."}, status=status.HTTP_401_UNAUTHORIZED)
+        print(f"Received user: {user}")  # 유저 정보 출력
+        print("Received data:", request.data)  # 요청 데이터 출력
+        print("Received files:", request.FILES)  # 파일 데이터 출력
+
         title = request.data.get("title")
         date = request.data.get("date")
         seat = request.data.get("seat")
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
         casting = request.data.get("casting")
-        uploaded_file = request.data.get("uploaded_file")
-        uploaded_seat_image = request.data.get("uploaded_seat_image")
-        keyword = request.data.get("keyword")  # keyword 추가
-        owner_info = request.data.get("owner")
+        uploaded_file = request.FILES.get("uploaded_file")
+        uploaded_seat_image = request.FILES.get("uploaded_seat_image")
+        keyword = request.data.get("keyword")
+        phone_last_digits = request.data.get("phone_last_digits")
 
-        if not owner_info:
-            return Response({"detail": "owner field missing."}, status=status.HTTP_400_BAD_REQUEST)
-
-        username = owner_info.get("username")
-        password = owner_info.get("password")
-
-        if not username or not password:
-            return Response(
-                {"detail": "[username, password] fields missing in owner"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
+        # 필수 필드가 있는지 확인
         if not title or not date or not seat or not price or not casting:
-            return Response({"detail": "content fields missing."}, status=status.HTTP_400_BAD_REQUEST)
+            print("필수 필드가 누락되었습니다.")  # 디버깅: 필수 필드 누락 여부 확인
+            return Response({"detail": "필수 항목이 누락되었습니다."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            author = User.objects.get(username=username)
-
             # Ticket 객체 생성
+            print("Creating Ticket object...")  # 디버깅: Ticket 객체 생성 전 로그
             ticket = Ticket.objects.create(
-                title=title, 
-                date=date, 
-                seat=seat, 
-                booking_details=booking_details, 
-                price=price, 
-                casting=casting, 
-                uploaded_file=uploaded_file, 
+                title=title,
+                date=date,
+                seat=seat,
+                booking_details=booking_details,
+                price=price,
+                casting=casting,
+                uploaded_file=uploaded_file,
                 uploaded_seat_image=uploaded_seat_image,
-                owner=author
+                phone_last_digits=phone_last_digits,  # 전화번호 마지막 4자리 저장
+                owner=user,  # 현재 로그인된 사용자
             )
+            print("Ticket created:", ticket)  # 디버깅: 생성된 티켓 정보 출력
 
-            # 좌석 이미지 처리 및 저장
             if uploaded_seat_image:
-                ticket.save(keyword=keyword)  # save 호출 시 keyword로 좌석 이미지 처리
+                print("Saving uploaded seat image...")  # 디버깅: 이미지 저장 전 로그
+                ticket.save(keyword=keyword)
 
-            # Create a conversation for the newly created ticket
+            # 티켓과 관련된 대화 생성
+            print("Creating Conversation object...")  # 디버깅: Conversation 생성 전 로그
             conversation = Conversation.objects.create(
                 ticket=ticket,
-                owner=author,
-                transferee=None  # Start with no transferee
+                owner=user,
+                transferee=None  # 양도자가 아직 없음
             )
+            print("Conversation created:", conversation)  # 디버깅: 생성된 대화 정보 출력
 
             # TicketPost 객체 생성
+            print("Creating TicketPost object...")  # 디버깅: TicketPost 생성 전 로그
             ticket_post = TicketPost.objects.create(
                 ticket=ticket,
-                author=author
+                author=user
             )
             ticket_post.save()
+            print("TicketPost created:", ticket_post)  # 디버깅: 생성된 TicketPost 정보 출력
 
-        except User.DoesNotExist:
-            return Response({"detail": "User Not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"오류 발생: {str(e)}")  # 디버깅: 발생한 오류 출력
+            return Response({"detail": f"오류 발생: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # 성공적으로 생성된 경우의 응답
         serializer = TicketPostSerializer(ticket_post)
+        print("Serialized data:", serializer.data)  # 디버깅: 응답으로 보낼 데이터 출력
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
 class TicketPostDetailView(APIView):
     @swagger_auto_schema(
@@ -235,6 +242,7 @@ class TransferListView(APIView):
             return Response({"detail": "No transferred tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
         transfer_serializer = TicketSerializer(transfer_list, many=True)
+        print(transfer_serializer.data)
         return Response(transfer_serializer.data, status=status.HTTP_200_OK)
 
 
@@ -255,6 +263,11 @@ class ReceivedListView(APIView):
 
         received_serializer = TicketSerializer(received_list, many=True)
         return Response(received_serializer.data, status=status.HTTP_200_OK)
+    
+import logging
+
+logger = logging.getLogger(__name__)
+    
 # Tesseract 경로 설정 (윈도우 경로 설정)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -271,65 +284,78 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 def process_image(request):
-    # 1. 입력어 확인
-    keyword = request.POST.get('keyword', '').strip()
+    try:
+        # Ensure keyword and both files are present
+        keyword = request.POST.get('keyword', '').strip()
+        print(keyword)
 
-    # 2. 파일 확인 및 처리
-    if request.method == 'POST' and request.FILES.get('file'):
-        file = request.FILES['file']
-        file_path = default_storage.save(f'uploads/{file.name}', file)
-        file_full_path = os.path.join(default_storage.location, file_path)
+        if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
+            return Response({"status": "error", "message": "Both files are required."}, status=400)
 
-        # 이미지 열기 및 처리
-        image = Image.open(file_full_path)
+        # Handle reservation image
+        reserv_image = request.FILES['reservImage']
+        reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
+        reserv_file_full_path = os.path.join(default_storage.location, reserv_file_path)
+
+        # Handle seat image
+        seat_image = request.FILES['seatImage']
+        seat_file_path = default_storage.save(f'uploads/{seat_image.name}', seat_image)
+        seat_file_full_path = os.path.join(default_storage.location, seat_file_path)
+
+        # Process reservation image using pytesseract
+        image = Image.open(reserv_file_full_path)
         extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
 
-        # 3. 입력어에 따른 분기 처리
+        # Depending on the keyword, process the image data
         if keyword == '인터파크':
-            return process_interpark_data(extracted_text)
+            # Process Interpark related data
+            response_data = process_interpark_data(extracted_text)
+            print(response_data)
+            return JsonResponse(response_data, status=200)
         elif keyword == '예스24':
-            return process_yes24_data(extracted_text)
+            # Process Yes24 related data
+            response_data = process_yes24_data(extracted_text)
+            print(response_data)
+            if not isinstance(response_data, dict):  # Ensure it's a dictionary
+                print("Invalid response_data format")
+            return JsonResponse(response_data, status=200, safe=False)
         elif keyword == '티켓링크':
-            return process_link_data(extracted_text)
+            # Process Ticketlink related data
+            response_data = process_link_data
+            if not isinstance(response_data, dict):  # Ensure it's a dictionary
+                print("Invalid response_data format")
+            return JsonResponse(response_data, status=200)
         else:
-            return JsonResponse({
-        "status": "fail",
-        "reservation_status": "",
-        "date_info": "",
-        "ticket_number": "",
-        "cast_info": "",
-        "total_amount": "",
-        "price_grade": "",
-        "seat_number": "",
-        "place": "",
-    })
+            return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
-    return JsonResponse({"status": "error", "message": "파일이 업로드되지 않았습니다."})
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=500)
 
 def process_link_data(extracted_text):
     try:
         reservation_status = check_reservation_status(extracted_text)
         date_info = extract_viewing_info_link(extracted_text)
         ticket_number = extract_ticket_number_link(extracted_text)
-        #cast_info = extract_cast(extracted_text)
+        # cast_info = extract_cast(extracted_text)
         total_amount = extract_total_amount(extracted_text)
         price_grade = extract_discount_info(extracted_text)
         seat_number = extract_line_with_yeol_and_beon(extracted_text)
         place = extract_line_after_at_link(extracted_text)
 
-        return JsonResponse({
+        # 딕셔너리로 반환
+        return {
             "status": "success",
             "reservation_status": reservation_status,
             "date_info": date_info,
             "ticket_number": ticket_number,
-            #"cast_info": cast_info,
+            # "cast_info": cast_info,
             "total_amount": total_amount,
             "price_grade": price_grade,
             "seat_number": seat_number,
             "place": place,
-        })
+        }
     except ValueError as e:
-        return JsonResponse({"status": "error", "message": str(e)})
+        return {"status": "error", "message": str(e)}
     
 def extract_line_with_yeol_and_beon(text):
     # 텍스트를 줄 단위로 분리
@@ -420,7 +446,7 @@ def process_interpark_data(extracted_text):
         seat_number = extract_seat_number(extracted_text)
         place = extract_line_after_at(extracted_text)
 
-        return JsonResponse({
+        return {
             "status": "success",
             "reservation_status": reservation_status,
             "date_info": date_info,
@@ -430,7 +456,7 @@ def process_interpark_data(extracted_text):
             "price_grade": price_grade,
             "seat_number": seat_number,
             "place": place,
-        })
+        }
 
     except ValueError as e:
         return JsonResponse({"status": "error", "message": str(e)})
@@ -550,7 +576,7 @@ def process_yes24_data(extracted_text):
         seat_number = extract_seat_number_yes24(extracted_text)
         place = extract_line_after_at_yes24(extracted_text)
 
-        return JsonResponse({
+        return {
             "status": "success",
             #"reservation_status": reservation_status,
             "date_info": date_info,
@@ -559,7 +585,7 @@ def process_yes24_data(extracted_text):
             "price_grade": price_grade,
             "seat_number": seat_number,
             "place": place,
-        })
+        }
 
     except ValueError as e:
         return JsonResponse({"status": "error", "message": str(e)})
