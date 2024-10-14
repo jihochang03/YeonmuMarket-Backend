@@ -65,6 +65,12 @@ class TicketPostListView(APIView):
         keyword = request.data.get("keyword")
         phone_last_digits = request.data.get("phone_last_digits")
 
+        if not uploaded_file or not uploaded_seat_image:
+            print("No files received or file upload failed.")
+        else:
+            print(f"Uploaded file: {uploaded_file.name}")
+            print(f"Uploaded seat image: {uploaded_seat_image.name}")
+
         # 필수 필드가 있는지 확인
         if not title or not date or not seat or not price or not casting:
             print("필수 필드가 누락되었습니다.")  # 디버깅: 필수 필드 누락 여부 확인
@@ -205,8 +211,9 @@ class TicketPostDetailView(APIView):
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
         casting = request.data.get("casting")
-        uploaded_file = request.data.get("uploaded_file")
-        uploaded_seat_image = request.data.get("uploaded_seat_image")
+        uploaded_file = request.FILES.get("uploaded_file")
+        uploaded_seat_image = request.FILES.get("uploaded_seat_image")
+        
 
         if not title or not date or not seat or not price or not casting:
             return Response({"detail": "Required fields missing."}, status=status.HTTP_400_BAD_REQUEST)
