@@ -11,7 +11,7 @@ app_name = 'tickets'
 
 urlpatterns = [
     path('create/', TicketPostListView.as_view()),
-    path('<int:pk>/', TicketPostDetailView.as_view()),
+    path('ticketpost/<int:ticket_post_id>/', TicketPostDetailView.as_view()),
     path('transferred/', TransferListView.as_view(), name='transferred-tickets'),
     path('received/', ReceivedListView.as_view(), name='received-tickets'),
     path('process_image/', process_image, name='process_image'),

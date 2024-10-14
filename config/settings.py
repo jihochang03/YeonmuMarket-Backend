@@ -30,7 +30,7 @@ environ.Env.read_env(
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY =env('SECRET_KEY')
 KAKAO_KEY=env('KAKAO_KEY')
-KAKAO_REDIRECT_URI = 'http://127.0.0.1:8000/kakao/callback/'
+KAKAO_REDIRECT_URI = 'http://localhost:5173/auth'
 DATABASE_PASSWORD=env('DATABASE_PASSWORD')
 
 OPEN_BANKING_API_BASE_URL = 'https://testapi.openbanking.or.kr'
