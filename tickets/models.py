@@ -17,18 +17,19 @@ class Ticket(models.Model):
     id = models.AutoField(primary_key=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
     transferee = models.ForeignKey(User, related_name="ticket_transferee", null=True, blank=True, on_delete=models.SET_NULL)
-    title = models.CharField(max_length=100, default='Untitled Ticket')
-    date = models.DateField(default=date.today)
-    seat = models.CharField(max_length=50, default='General Admission')
+    title = models.CharField(max_length=255)
+    date = models.DateField()
+    seat = models.CharField(max_length=255)
     booking_details = models.CharField(max_length=100, default='No discounts applied')
-    price = models.DecimalField(max_digits=10, decimal_places=0, default=0)
-    casting = models.CharField(max_length=100, default='Not specified')
-    keyword = models.CharField(max_length=100, default="인터파크")
+    price = models.DecimalField(max_digits=10, decimal_places=0)
+    casting = models.CharField(max_length=255)
     uploaded_file = models.FileField(upload_to='tickets/', null=True, blank=True)
     masked_file = models.FileField(upload_to='tickets/masked/', null=True, blank=True)  # 가려진 파일을 저장하는 필드
     uploaded_seat_image = models.FileField(upload_to='tickets/seats/', null=True, blank=True)  # 좌석 사진 저장
-    processed_seat_image = models.FileField(upload_to='tickets/seats/processed/', null=True, blank=True) # 처리된 좌석 사진 저장
+    processed_seat_image = models.FileField(upload_to='tickets/seats/processed/', null=True, blank=True)
+    keyword = models.CharField(max_length=255, null=True, blank=True)
     phone_last_digits = models.CharField(max_length=4, blank=True, null=True) 
+    
     
     STATUS_CHOICES = [
         ('waiting', '양수자 대기'),

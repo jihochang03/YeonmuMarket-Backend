@@ -52,7 +52,8 @@ class TicketPostListView(APIView):
             return Response({"detail": "인증되지 않은 사용자입니다. 로그인 후 시도해주세요."}, status=status.HTTP_401_UNAUTHORIZED)
         print(f"Received user: {user}")  # 유저 정보 출력
         print("Received data:", request.data)  # 요청 데이터 출력
-        print("Received files:", request.FILES)  # 파일 데이터 출력
+        if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
+            return Response({"status": "error", "message": "Both files are required."}, status=400)
 
         title = request.data.get("title")
         date = request.data.get("date")
@@ -60,8 +61,8 @@ class TicketPostListView(APIView):
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
         casting = request.data.get("casting")
-        uploaded_file = request.FILES.get("uploaded_file")
-        uploaded_seat_image = request.FILES.get("uploaded_seat_image")
+        uploaded_file =request.FILES['reservImage']
+        uploaded_seat_image = request.FILES['seatImage']
         keyword = request.data.get("keyword")
         phone_last_digits = request.data.get("phone_last_digits")
 
@@ -694,5 +695,3 @@ def extract_line_after_at_yes24(text):
     extracted_text = match.group(1).replace(' ', '')
 
     return extracted_text
-
-
