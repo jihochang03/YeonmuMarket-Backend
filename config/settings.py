@@ -32,6 +32,7 @@ SECRET_KEY =env('SECRET_KEY')
 KAKAO_KEY=env('KAKAO_KEY')
 KAKAO_REDIRECT_URI = 'http://localhost:5173/auth'
 DATABASE_PASSWORD=env('DATABASE_PASSWORD')
+DATABASE_HOST=env('DATABASE_HOST')
 
 OPEN_BANKING_API_BASE_URL = 'https://testapi.openbanking.or.kr'
 OPEN_BANKING_CLIENT_ID = env('OPEN_BANKING_CLIENT_ID')
@@ -64,6 +65,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'conversations',
     'payments',
+    'django_extensions'
 ]
 
 MIDDLEWARE = [
@@ -125,7 +127,7 @@ DATABASES = {
         'NAME': 'yeonmumarketdb',          # The name of your PostgreSQL database
         'USER': 'admin',           # Your PostgreSQL username
         'PASSWORD': DATABASE_PASSWORD,      # Your PostgreSQL password
-        'HOST': '172.18.48.11',              # Or use an IP if your DB is hosted elsewhere
+        'HOST': DATABASE_HOST,              # Or use an IP if your DB is hosted elsewhere
         'PORT': '5432',                   # Default PostgreSQL port
     }
 
@@ -189,10 +191,11 @@ REST_FRAMEWORK = {
     ),
 }
 
+
 SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False, # swagger가 기본으로 사용하는 session auth를 사용하지 않음
     'SECURITY_DEFINITIONS': {
-        'BearerAuth': { # bearer 토큰을 헤더의 Authorization에 담아서 보냄
+        'Bearer': { # bearer 토큰을 헤더의 Authorization에 담아서 보냄
             'type': 'apiKey',
             'name': 'Authorization',
             'in': 'header',
@@ -200,7 +203,7 @@ SWAGGER_SETTINGS = {
         }
     },
     'SECURITY_REQUIREMENTS': [{
-        'BearerAuth': []
+        'Bearer': []
     }]
 }
 
