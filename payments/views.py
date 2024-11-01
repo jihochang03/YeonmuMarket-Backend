@@ -7,63 +7,94 @@ from .serializers import AccountSerializer
 from django.http import HttpRequest
 from .models import Account
 import json
-
-# AccountRegisterView: 계좌 등록 및 송금자 이름 생성
+from user.models import UserProfile
+from .crawling import check_account  # crawling.py의 함수 임포트
 class AccountRegisterView(APIView):
     @swagger_auto_schema(
         operation_id="계좌 등록",
         operation_description="계좌 정보를 등록합니다.",
         request_body=AccountSerializer,
         security=[{"Bearer": []}],
-        responses={201: openapi.Response(
-            description="Account registered successfully",
-            examples={
-                "application/json": {
-                    "detail": "Account registered successfully.",
-                    "account": {
-
-                        "bank_account": "1234567890",
-                        "bank_name": "KB국민은행"
+        responses={
+            201: openapi.Response(
+                description="Account registered successfully",
+                examples={
+                    "application/json": {
+                        "detail": "Account registered successfully.",
+                        "account": {
+                            "bank_account": "1234567890",
+                            "bank_name": "KB국민은행"
+                        }
                     }
                 }
-            }
-        ),
-        400: openapi.Response(
-            description="Invalid input data",
-            examples={
-                "application/json": {"account_number": ["This field is required."]}
-            }
-        )}
+            ),
+            400: openapi.Response(
+                description="Invalid input data",
+                examples={
+                    "application/json": {"account_number": ["This field is required."]}
+                }
+            ),
+            404: openapi.Response(
+                description="Account not found",
+                examples={
+                    "application/json": {"detail": "The account number does not exist in the system."}
+                }
+            )
+        }
     )
     def post(self, request: HttpRequest):
         user = request.user
-        print(user)
+        print("Authenticated User:", user)
+
         if not user.is_authenticated:
-            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+            print("User not authenticated")
+            return Response({"detail": "Please sign in"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             account = Account.objects.get(user=user)
-            return Response({"detail": "Account Already exists."}, status=status.HTTP_400_BAD_REQUEST)
+            print("Account already exists for user:", user)
+            user_profile = UserProfile.objects.get(user=user)
+            user_profile.is_payment_verified = True
+            user_profile.save()
+            return Response({"detail": "Account Already exists."}, status=status.HTTP_201_CREATED)
         except Account.DoesNotExist:
             data = json.loads(request.body)
-            bank_account = data["accountNum"]
-            bank_name = data["bank"]
+            print("Request Data:", data)
 
-            data={'bank_account': bank_account, 'bank_name': bank_name}
+            bank_account = data.get("accountNum")
+            bank_name = data.get("bank")
+            print("Bank Account:", bank_account)
+            print("Bank Name:", bank_name)
+
+            # 계좌 유효성 검사
+            is_valid_account = check_account(bank_account)
+            if not is_valid_account:
+                print("Account validation failed")
+                return Response({"detail": "사기 계좌로 등록되었습니다"},
+                                status=status.HTTP_404_NOT_FOUND)
+
+            # Serializer 초기화 및 검증
+            data = {'bank_account': bank_account, 'bank_name': bank_name}
             serializer = AccountSerializer(data=data)
+            print("Serializer Data:", serializer.initial_data)
 
             if serializer.is_valid():
+                print("Serializer is valid")
                 serializer.save(user=user)
-                # TODO: 계좌 유효성 여부 검사 로직 넣기
-                
+
+                # 유저 프로필 업데이트
+                user_profile = UserProfile.objects.get(user=user)
+                user_profile.is_payment_verified = True
+                user_profile.save()
 
                 return Response({
                     "detail": "Account registered successfully.",
                     "account": serializer.data
                 }, status=status.HTTP_201_CREATED)
+            else:
+                print("Serializer errors:", serializer.errors)
 
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
     @swagger_auto_schema(
         operation_id="계좌 정보 수정",
         operation_description="계좌 정보를 수정합니다.",
