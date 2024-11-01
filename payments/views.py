@@ -4,9 +4,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .serializers import AccountSerializer
-from user.models import UserProfile
-from django.contrib.auth.models import User
-import random
+from django.http import HttpRequest
+from .models import Account
+import json
 
 # AccountRegisterView: 계좌 등록 및 송금자 이름 생성
 class AccountRegisterView(APIView):
@@ -14,13 +14,14 @@ class AccountRegisterView(APIView):
         operation_id="계좌 등록",
         operation_description="계좌 정보를 등록합니다.",
         request_body=AccountSerializer,
+        security=[{"Bearer": []}],
         responses={201: openapi.Response(
             description="Account registered successfully",
             examples={
                 "application/json": {
                     "detail": "Account registered successfully.",
                     "account": {
-                        "id": 1,
+
                         "bank_account": "1234567890",
                         "bank_name": "KB국민은행"
                     }
@@ -34,26 +35,123 @@ class AccountRegisterView(APIView):
             }
         )}
     )
-    def post(self, request):
+    def post(self, request: HttpRequest):
         user = request.user
-        user_profile = UserProfile.objects.get(user=user)
 
-        serializer = AccountSerializer(data=request.data)
-        if serializer.is_valid():
-            account = serializer.save(user=user)
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
 
-            # Update the UserProfile with the bank information
-            user_profile.bank_account = account.account_number
-            user_profile.bank_name = account.bank_name
-            user_profile.is_payment_verified = True
-            user_profile.save()
+        try:
+            account = Account.objects.get(user=user)
+            return Response({"detail": "Account Already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        except Account.DoesNotExist:
+            data = json.loads(request.body)
+            bank_account = data["bank_account"]
+            bank_name = data["bank_name"]
 
-            return Response({
-                "detail": "Account registered successfully.",
-                "account": serializer.data
-            }, status=status.HTTP_201_CREATED)
+            data={'bank_account': bank_account, 'bank_name': bank_name}
+            serializer = AccountSerializer(data=data)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if serializer.is_valid():
+                serializer.save(user=user)
+                # TODO: 계좌 유효성 여부 검사 로직 넣기
+                
+
+                return Response({
+                    "detail": "Account registered successfully.",
+                    "account": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @swagger_auto_schema(
+        operation_id="계좌 정보 수정",
+        operation_description="계좌 정보를 수정합니다.",
+        request_body=AccountSerializer,
+        responses={201: openapi.Response(
+            description="Account modified successfully",
+            examples={
+                "application/json": {
+                    "detail": "Account modified successfully.",
+                    "account": {
+
+                        "bank_account": "1234567890",
+                        "bank_name": "KB국민은행"
+                    }
+                }
+            }
+        ),
+        400: openapi.Response(
+            description="Invalid input data",
+            examples={
+                "application/json": {"account_number": ["This field is required."]}
+            }
+        )}
+    )
+    def put(self, request: HttpRequest):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            account = Account.objects.get(user=user)
+
+            data=json.loads(request.body)
+
+            data={'bank_account': data["bank_account"], 'bank_name': data["bank_name"]}
+
+            serializer = AccountSerializer(data=data)
+
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            account.bank_account = data["bank_account"]
+            account.bank_name = data["bank_name"]
+            account.save()
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        except Account.DoesNotExist:
+            return Response({"error": "account does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        
+    @swagger_auto_schema(
+        operation_id="계좌 정보 삭제",
+        operation_description="계좌 정보를 삭제합니다.",
+        responses={201: openapi.Response(
+            description="Account modified successfully",
+            examples={
+                "application/json": {
+                    "detail": "Account modified successfully.",
+                    "account": {
+
+                        "bank_account": "1234567890",
+                        "bank_name": "KB국민은행"
+                    }
+                }
+            }
+        ),
+        401: openapi.Response(
+            description="Unauthorized user"
+        ),
+        404: openapi.Response(
+            description="account not found"
+        )})
+    def delete(self, request: HttpRequest):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            account = Account.objects.get(user=user)
+            account.delete()
+            return Response({"detail": "account delete success"}, status=status.HTTP_204_NO_CONTENT)
+
+        except Account.DoesNotExist:
+            return Response({"detail": "account not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        
+
+
 
 # AccountDetailView: 유저 계좌 정보 조회
 class AccountDetailView(APIView):
@@ -73,77 +171,18 @@ class AccountDetailView(APIView):
             404: openapi.Response(description="Account not found for the user")
         }
     )
-    def get(self, request):
+    def get(self, request: HttpRequest):
         user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
+        
         try:
-            user_profile = UserProfile.objects.get(user=user)
-            bank_account = user_profile.bank_account
-            bank_name = user_profile.bank_name
-
-            if not bank_account:
-                return Response({"detail": "No account linked to the user."}, status=status.HTTP_404_NOT_FOUND)
-
+            account_info = Account.objects.get(user=user)
             return Response({
-                "bank_account": bank_account,
-                "bank_name": bank_name
-            }, status=status.HTTP_200_OK)
+            "bank_account": account_info.bank_account,
+            "bank_name": account_info.bank_name
+             }, status=status.HTTP_200_OK)
+        except Account.DoesNotExist:
+            return Response({"detail": "No account linked to the user."}, status=status.HTTP_404_NOT_FOUND)
 
-        except UserProfile.DoesNotExist:
-            return Response({"detail": "UserProfile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-
-# AccountRegisterAndVerifyView: 새 계좌 등록 및 기존 계좌 삭제
-class AccountAddView(APIView):
-    @swagger_auto_schema(
-        operation_id="새 계좌 등록",
-        operation_description="새로운 계좌를 추가하고 기존 계좌는 삭제됩니다.",
-        request_body=AccountSerializer,
-        responses={
-            201: openapi.Response(
-                description="New account added successfully",
-                examples={
-                    "application/json": {
-                        "detail": "New account registered.",
-                        "account": {
-                            "id": 2,
-                            "bank_account": "9876543210",
-                            "bank_name": "우리은행"
-                        }
-                    }
-                }
-            ),
-            400: openapi.Response(description="Bad request"),
-            404: openapi.Response(description="UserProfile not found")
-        }
-    )
-    def post(self, request):
-        user = request.user
-        try:
-            user_profile = UserProfile.objects.get(user=user)
-
-            serializer = AccountSerializer(data=request.data)
-            if serializer.is_valid():
-                # 기존 계좌 삭제
-                old_account = user_profile.bank_account
-                if old_account:
-                    user_profile.bank_account = None
-                    user_profile.bank_name = None
-                    user_profile.save()
-
-                # 새 계좌 등록
-                new_account = serializer.save(user=user)
-
-                user_profile.bank_account = new_account.account_number
-                user_profile.bank_name = new_account.bank_name
-                user_profile.save()
-
-                return Response({
-                    "detail": "New account registered.",
-                    "account": serializer.data
-                }, status=status.HTTP_201_CREATED)
-
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except UserProfile.DoesNotExist:
-            return Response({"detail": "UserProfile not found."}, status=status.HTTP_404_NOT_FOUND)
-
+        
