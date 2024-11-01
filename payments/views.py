@@ -37,7 +37,7 @@ class AccountRegisterView(APIView):
     )
     def post(self, request: HttpRequest):
         user = request.user
-
+        print(user)
         if not user.is_authenticated:
             return Response({"detail": "please signin"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -46,8 +46,8 @@ class AccountRegisterView(APIView):
             return Response({"detail": "Account Already exists."}, status=status.HTTP_400_BAD_REQUEST)
         except Account.DoesNotExist:
             data = json.loads(request.body)
-            bank_account = data["bank_account"]
-            bank_name = data["bank_name"]
+            bank_account = data["accountNum"]
+            bank_name = data["bank"]
 
             data={'bank_account': bank_account, 'bank_name': bank_name}
             serializer = AccountSerializer(data=data)
