@@ -7,7 +7,7 @@ class UserProfile(models.Model):
     nickname = models.CharField(max_length=256, blank=True, null=True)
     is_social_login = models.BooleanField(default=False)
     kakao_email = models.EmailField(default="")
-    # is_payment_verified = models.BooleanField(default=True)
+    is_payment_verified = models.BooleanField(default=False)
     # bank_account = models.CharField(max_length=20, null=True, blank=True)
     # bank_name = models.CharField(max_length=100, null=True, blank=True)
     kakao_token = models.CharField(max_length=256, blank=True, null=True)  # 카카오톡 액세스 토큰 추가
