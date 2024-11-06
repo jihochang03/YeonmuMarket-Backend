@@ -67,11 +67,11 @@ class AccountRegisterView(APIView):
             print("Bank Name:", bank_name)
 
             # 계좌 유효성 검사
-            is_valid_account = check_account(bank_account)
-            if not is_valid_account:
-                print("Account validation failed")
-                return Response({"detail": "사기 계좌로 등록되었습니다"},
-                                status=status.HTTP_404_NOT_FOUND)
+            #is_valid_account = check_account(bank_account)
+            #if not is_valid_account:
+                #print("Account validation failed")
+                #return Response({"detail": "사기 계좌로 등록되었습니다"},
+                                #status=status.HTTP_404_NOT_FOUND)
 
             # Serializer 초기화 및 검증
             data = {'bank_account': bank_account, 'bank_name': bank_name}
@@ -95,6 +95,7 @@ class AccountRegisterView(APIView):
                 print("Serializer errors:", serializer.errors)
 
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
     @swagger_auto_schema(
         operation_id="계좌 정보 수정",
         operation_description="계좌 정보를 수정합니다.",

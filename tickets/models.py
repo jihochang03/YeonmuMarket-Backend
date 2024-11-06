@@ -36,7 +36,7 @@ class Ticket(models.Model):
         ('transfer_pending', '양도 중'),
         ('transfer_completed', '양도 완료'),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='transfer_pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='waiting')
     
     def __str__(self):
         return self.title

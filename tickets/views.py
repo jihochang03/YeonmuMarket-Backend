@@ -329,7 +329,7 @@ def process_image(request):
             return JsonResponse(response_data, status=200, safe=False)
         elif keyword == '티켓링크':
             # Process Ticketlink related data
-            response_data = process_link_data
+            response_data = process_link_data(extracted_text)
             if not isinstance(response_data, dict):  # Ensure it's a dictionary
                 print("Invalid response_data format")
             return JsonResponse(response_data, status=200)
