@@ -81,9 +81,15 @@ MIDDLEWARE = [
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+CSRF_COOKIE_SECURE = False  # HTTPS에서만 쿠키 전송 설정 (개발 환경에서는 False)
+CSRF_COOKIE_HTTPONLY = False
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",  # 프론트엔드 주소
+    "http://127.0.0.1:5173",
+    'http://localhost:8000'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -180,7 +186,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Allow any for Swagger docs, adjust in views
+        'rest_framework.permissions.IsAuthenticated',  # Allow any for Swagger docs, adjust in views
     ],
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
@@ -251,4 +257,4 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 ACCOUNT_AUTHENTICATION_METHOD = 'username_email'  # 이메일이나 사용자 이름 중 택 1
-ACCOUNT_EMAIL_VERIFICATION = 'none'  # 이메일 검증 비활성화
+ACCOUNT_EMAIL_VERIFICATION = 'none'  # 이메일 검증 비활성화 
