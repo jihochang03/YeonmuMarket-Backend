@@ -15,12 +15,17 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from PIL import Image
 import pytesseract
+from rest_framework.permissions import AllowAny
 import re
 import os
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from conversations.models import Conversation  # Import Conversation model
 from user.models import UserProfile
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
 class TicketView(APIView):
     @swagger_auto_schema(
         operation_id="티켓 정보 조회",
@@ -288,14 +293,16 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
     ],
     responses={200: '성공 시 예매 정보를 반환합니다.'}
 )
+
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 def process_image(request):
+    permission_classes = [AllowAny]
     try:
         # Ensure keyword and both files are present
         keyword = request.POST.get('keyword', '').strip()
-        print(keyword)
+        print("Keyword:", keyword)
 
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
             return Response({"status": "error", "message": "Both files are required."}, status=400)
@@ -319,20 +326,17 @@ def process_image(request):
             # Process Interpark related data
             response_data = process_interpark_data(extracted_text)
             print(response_data)
-            return JsonResponse(response_data, status=200)
+            return Response(response_data, status=200)
         elif keyword == '예스24':
             # Process Yes24 related data
             response_data = process_yes24_data(extracted_text)
             print(response_data)
-            if not isinstance(response_data, dict):  # Ensure it's a dictionary
-                print("Invalid response_data format")
-            return JsonResponse(response_data, status=200, safe=False)
+            return Response(response_data, status=200)
         elif keyword == '티켓링크':
             # Process Ticketlink related data
             response_data = process_link_data(extracted_text)
-            if not isinstance(response_data, dict):  # Ensure it's a dictionary
-                print("Invalid response_data format")
-            return JsonResponse(response_data, status=200)
+            print(response_data)
+            return Response(response_data, status=200)
         else:
             return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
