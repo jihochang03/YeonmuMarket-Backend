@@ -8,6 +8,8 @@ from PIL import Image, ImageDraw
 import pytesseract
 from django.conf import settings
 import cv2
+from io import BytesIO
+import numpy as np
 
 # Tesseract 경로 설정
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -55,36 +57,65 @@ class Ticket(models.Model):
 
     def process_and_save_masked_image(self):
         if self.uploaded_file:
-            input_image_path = self.uploaded_file.path
-            output_image_name = f"masked_{os.path.basename(self.uploaded_file.name)}"
-            output_image_path = os.path.join(settings.MEDIA_ROOT, 'tickets/masked', output_image_name)
+            # 업로드된 파일을 메모리에서 읽어옴
+            self.uploaded_file.open()
+            image_data = self.uploaded_file.read()
+            self.uploaded_file.close()
 
-            # 폴더가 없으면 생성
-            os.makedirs(os.path.dirname(output_image_path), exist_ok=True)
+            # 이미지 데이터를 PIL 이미지로 변환
+            image = Image.open(BytesIO(image_data))
+            draw = ImageDraw.Draw(image)
 
-            # 이미지 마스킹 처리
-            if mask_booking_number_in_image(input_image_path, output_image_path):
-                with open(output_image_path, 'rb') as f:
-                    self.masked_file.save(output_image_name, File(f), save=True)
+            data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang='kor')
+            n_boxes = len(data['text'])
+            found = False
+            for i in range(n_boxes):
+                if '번' in data['text'][i]:
+                    (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
+                    if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
+                        found = True
+                        image_width = image.width
+                        draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
+
+            if found:
+            # 처리된 이미지를 메모리에 저장
+                output_image_name = f"masked_{os.path.basename(self.uploaded_file.name)}"
+                output_image = BytesIO()
+                image.save(output_image, format='JPEG')
+                output_image.seek(0)
+                # 처리된 이미지를 모델 필드에 저장
+                self.masked_file.save(output_image_name, File(output_image), save=True)
+
+    
 
     def process_and_save_seat_image(self, keyword):
         if self.uploaded_seat_image:
-            input_image_path = self.uploaded_seat_image.path
-            output_image_name = f"processed_{os.path.basename(self.uploaded_seat_image.name)}"
-            output_image_path = os.path.join(settings.MEDIA_ROOT, 'tickets/seats/processed', output_image_name)
+            # 업로드된 파일을 메모리에서 읽어옴
+            self.uploaded_seat_image.open()
+            image_data = self.uploaded_seat_image.read()
+            self.uploaded_seat_image.close()
 
-            # 폴더가 없으면 생성
-            os.makedirs(os.path.dirname(output_image_path), exist_ok=True)
+            # 이미지 데이터를 OpenCV 이미지로 변환
+            nparr = np.frombuffer(image_data, np.uint8)
+            cv_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if cv_image is None:
+                print("Could not decode image")
+                return
 
-            # 좌석 이미지 처리 (keyword에 따라 분기 처리)
+            # 이미지 처리
             if keyword == '티켓링크':
-                draw_bounding_box_no_color(input_image_path, output_image_path)
+                pil_image = draw_bounding_box_no_color_cv(cv_image)
             else:
-                draw_bounding_box_purple(input_image_path, output_image_path)
-
-            # 처리된 파일 저장
-            with open(output_image_path, 'rb') as f:
-                self.processed_seat_image.save(output_image_name, File(f), save=True)
+                pil_image = draw_bounding_box_purple_cv(cv_image)
+        
+            # 처리된 이미지를 메모리에 저장
+            output_image_name = f"processed_{os.path.basename(self.uploaded_seat_image.name)}"
+            output_image = BytesIO()
+            pil_image.save(output_image, format='JPEG')
+            output_image.seek(0)
+        
+        # 처리된 이미지를 모델 필드에 저장
+        self.processed_seat_image.save(output_image_name, File(output_image), save=True)
 
 # 이미지 처리 함수는 따로 정의하여 사용
 def find_nearby_text(data, x, y, w, h, target_text):
@@ -147,6 +178,42 @@ def draw_bounding_box_purple(image_path, output_path, width_scale=4):
         draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", fill="red", width=3)
 
     pil_image.save(output_path)
+def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
+    height, width, _ = cv_image.shape
+    gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+    _, thresh_image = cv2.threshold(gray_image, 200, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_image)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w > 5 and h > 5:
+            box_x1 = max(0, x - w * (width_scale - 1) // 2)
+            box_y1 = y
+            box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+            box_y2 = y + h
+            draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="black", fill="black", width=3)
+    return pil_image
+
+def draw_bounding_box_purple_cv(cv_image, width_scale=4):
+    height, width, _ = cv_image.shape
+    hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+    lower_purple = (120, 50, 50)
+    upper_purple = (140, 255, 255)
+    mask = cv2.inRange(hsv_image, lower_purple, upper_purple)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_image)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        box_x1 = max(0, x - w * (width_scale - 1) // 2)
+        box_y1 = y
+        box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+        box_y2 = y + h
+        draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", fill="red", width=3)
+    return pil_image
 
 # 색상 무관한 좌석 감지
 def draw_bounding_box_no_color(image_path, output_path, width_scale=4):
