@@ -52,39 +52,33 @@ class TicketPostListView(APIView):
     )
     def post(self, request):
         user = request.user
-        print(f"-------- User: {user}" )  # 유저 정보 출력
+        print(f"-------- User: {user}")  # 유저 정보 출력
         if user.is_anonymous:
             return Response({"detail": "인증되지 않은 사용자입니다. 로그인 후 시도해주세요."}, status=status.HTTP_401_UNAUTHORIZED)
-        print(f"Received user: {user}")  # 유저 정보 출력
+
         print("Received data:", request.data)  # 요청 데이터 출력
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
             return Response({"status": "error", "message": "Both files are required."}, status=400)
 
+        # 요청 데이터 추출
         title = request.data.get("title")
         date = request.data.get("date")
         seat = request.data.get("seat")
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
         casting = request.data.get("casting")
-        uploaded_file =request.FILES['reservImage']
+        uploaded_file = request.FILES['reservImage']
         uploaded_seat_image = request.FILES['seatImage']
         keyword = request.data.get("keyword")
         phone_last_digits = request.data.get("phone_last_digits")
 
-        if not uploaded_file or not uploaded_seat_image:
-            print("No files received or file upload failed.")
-        else:
-            print(f"Uploaded file: {uploaded_file.name}")
-            print(f"Uploaded seat image: {uploaded_seat_image.name}")
-
-        # 필수 필드가 있는지 확인
+        # 필수 필드 확인
         if not title or not date or not seat or not price or not casting:
             print("필수 필드가 누락되었습니다.")  # 디버깅: 필수 필드 누락 여부 확인
             return Response({"detail": "필수 항목이 누락되었습니다."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Ticket 객체 생성
-            print("Creating Ticket object...")  # 디버깅: Ticket 객체 생성 전 로그
             ticket = Ticket.objects.create(
                 title=title,
                 date=date,
@@ -94,32 +88,26 @@ class TicketPostListView(APIView):
                 casting=casting,
                 uploaded_file=uploaded_file,
                 uploaded_seat_image=uploaded_seat_image,
-                phone_last_digits=phone_last_digits,  # 전화번호 마지막 4자리 저장
+                phone_last_digits=phone_last_digits,
                 owner=user,  # 현재 로그인된 사용자
             )
-            print("Ticket created:", ticket)  # 디버깅: 생성된 티켓 정보 출력
+            print("Ticket created:", ticket)
 
-            if uploaded_seat_image:
-                print("Saving uploaded seat image...")  # 디버깅: 이미지 저장 전 로그
-                ticket.save(keyword=keyword)
-
-            # 티켓과 관련된 대화 생성
-            print("Creating Conversation object...")  # 디버깅: Conversation 생성 전 로그
+            # 관련 대화 생성
             conversation = Conversation.objects.create(
                 ticket=ticket,
                 owner=user,
                 transferee=None  # 양도자가 아직 없음
             )
-            print("Conversation created:", conversation)  # 디버깅: 생성된 대화 정보 출력
+            print("Conversation created:", conversation)
 
             # TicketPost 객체 생성
-            print("Creating TicketPost object...")  # 디버깅: TicketPost 생성 전 로그
             ticket_post = TicketPost.objects.create(
                 ticket=ticket,
                 author=user
             )
             ticket_post.save()
-            print("TicketPost created:", ticket_post)  # 디버깅: 생성된 TicketPost 정보 출력
+            print("TicketPost created:", ticket_post)
 
         except Exception as e:
             print(f"오류 발생: {str(e)}")  # 디버깅: 발생한 오류 출력
@@ -128,7 +116,13 @@ class TicketPostListView(APIView):
         # 성공적으로 생성된 경우의 응답
         serializer = TicketPostSerializer(ticket_post)
         print("Serialized data:", serializer.data)  # 디버깅: 응답으로 보낼 데이터 출력
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        # 응답 데이터에 ticket_id 추가
+        response_data = serializer.data
+        response_data["ticket_id"] = ticket.id
+        
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class TicketPostDetailView(APIView):
