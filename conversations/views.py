@@ -37,7 +37,15 @@ class JoinConversationView(APIView):
             if not request.user.is_authenticated:
                 print(f"[JoinConversationView] User not authenticated. Redirecting to Kakao login.")
                 kakao_login_url = f"{reverse('user:kakao-login')}?next=/chat/{ticket_id}/join"
-                return HttpResponseRedirect(kakao_login_url)
+    
+                # Return JSON response with redirect URL
+                return Response(
+                {
+                    "detail": "User not authenticated. Redirecting to Kakao login.",
+                    "redirect_url": kakao_login_url
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
             ticket = Ticket.objects.get(id=ticket_id)
             print(f"[JoinConversationView] Ticket found: {ticket}")
@@ -50,7 +58,7 @@ class JoinConversationView(APIView):
                 print(f"[JoinConversationView] Conversation is yours: {conversation.owner}")
                 chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
                 return Response({"detail": "Conversation is yours.", "redirect_url": chat_url},status=status.HTTP_200_OK)
-            # Check if the user can join the conversation
+            
             elif conversation.transferee and conversation.transferee != user:
                 print(f"[JoinConversationView] Conversation full or already joined by another user: {conversation.transferee}")
                 return Response({"detail": "Conversation full or already joined."}, status=status.HTTP_403_FORBIDDEN)
