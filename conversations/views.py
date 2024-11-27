@@ -71,7 +71,6 @@ class JoinConversationView(APIView):
                 return Response({
                     "detail": "You have joined the conversation.",
                     "conversation_id": conversation.id,
-                    "masked_file": ticket.masked_file.url if ticket.masked_file else None,
                     "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
                 }, status=status.HTTP_200_OK)
             
@@ -117,7 +116,7 @@ class ConversationDetailView(APIView):
                 "title": ticket.title,
                 "transaction_step": conversation.transaction_step,
                 "user_role": "seller" if user == conversation.owner else "buyer",
-                "masked_file_url": ticket.masked_file.url if ticket.masked_file else None,
+                "masked_file_url": None,
                 "seat_image_url": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None,
                 "bank_account": None,
                 "bank_name": None,
@@ -126,13 +125,13 @@ class ConversationDetailView(APIView):
                 "phone_last_digits": None,
                 "buyer_name": conversation.transferee.username if conversation.transferee else '',
                 "seller_name": conversation.owner.username,
-                "transaction_step": conversation.transaction_step
-                
             }
             print(f"[ConversationDetailView] Response data prepared: {data}")
 
             # Include bank account info if transfer intents are confirmed
             if conversation.transaction_step >= 2:
+                data["masked_file_url"] = ticket.masked_file.url if ticket.masked_file else None
+
                 try:
                     transferor_account = Account.objects.get(user=conversation.owner)
                     print(f"[ConversationDetailView] Transferor account: {transferor_account}")
@@ -148,6 +147,7 @@ class ConversationDetailView(APIView):
             # Include ticket file and phone number if transfer is complete
             if conversation.transaction_step >= 4:
                 data["ticket_file_url"] = ticket.uploaded_file.url if ticket.uploaded_file else None
+                data["seat_image_url"] = ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
                 transferor_profile = UserProfile.objects.get(user=conversation.owner)
                 data["phone_last_digits"] = transferor_profile.phone_last_digits
 

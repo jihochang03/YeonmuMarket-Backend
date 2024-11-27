@@ -14,10 +14,14 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from PIL import Image
+from django.conf import settings
 import pytesseract
 from rest_framework.permissions import AllowAny
 import re
 import os
+from django.http import JsonResponse
+from rest_framework.decorators import api_view
+import tweepy
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
@@ -26,6 +30,10 @@ from user.models import UserProfile
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
+import requests
+from django.contrib.sites.shortcuts import get_current_site
+from django.urls import reverse
+
 class TicketView(APIView):
     @swagger_auto_schema(
         operation_id="티켓 정보 조회",
@@ -120,7 +128,22 @@ class TicketPostListView(APIView):
         # 응답 데이터에 ticket_id 추가
         response_data = serializer.data
         response_data["ticket_id"] = ticket.id
-        
+
+        current_site = get_current_site(request)
+        domain = current_site.domain
+
+        # Construct the full URL for the processed seat image
+        if ticket.processed_seat_image:
+            processed_seat_image_url = request.build_absolute_uri(ticket.processed_seat_image.url)
+            print(f"Processed Seat Image URL: {processed_seat_image_url}")
+        else:
+            processed_seat_image_url = None
+            print("Processed Seat Image does not exist")
+
+        response_data["masked_seat_image_url"] = processed_seat_image_url
+
+        # Debugging: Log the full response data
+        print(f"Response Data: {response_data}")
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -131,15 +154,26 @@ class TicketPostDetailView(APIView):
         operation_description="양도글 1개의 상세 정보를 조회합니다.",
         responses={200: TicketPostSerializer, 400: "Bad Request"},
     )
-    def get(self, request):
+    def get(self, request, ticket_post_id):
         try:
-            ticket_post_id = request.GET.get("ticket_post_id")
             ticket_post = TicketPost.objects.get(id=ticket_post_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = TicketPostSerializer(instance=ticket_post)
+        serializer = TicketPostSerializer(ticket_post, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Include absolute URLs for uploaded_file and uploaded_seat_image
+        ticket_post_data = TicketPostSerializer(instance=ticket_post).data
+        ticket_post_data['uploaded_file_url'] = (
+            request.build_absolute_uri(ticket_post.uploaded_file.url)
+            if ticket_post.uploaded_file else None
+        )
+        ticket_post_data['uploaded_seat_image_url'] = (
+            request.build_absolute_uri(ticket_post.uploaded_seat_image.url)
+            if ticket_post.uploaded_seat_image else None
+        )
+        return Response(ticket_post_data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
         operation_id="티켓 양도글 삭제",
@@ -176,35 +210,20 @@ class TicketPostDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @swagger_auto_schema(
-        operation_id="티켓 양도글 수정",
-        operation_description="티켓 양도글을 수정합니다.",
-        request_body=TicketPostDetailRequestSerializer,
-        responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
+    operation_id="티켓 양도글 수정",
+    operation_description="티켓 양도글을 수정합니다.",
+    request_body=TicketPostDetailRequestSerializer,
+    responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
     )
     def put(self, request, ticket_post_id):
         try:
             ticket_post = TicketPost.objects.get(id=ticket_post_id)
+            print(f"TicketPost found: {ticket_post}")  # Debugging
         except TicketPost.DoesNotExist:
+            print(f"TicketPost with id {ticket_post_id} not found.")  # Debugging
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        author_info = request.data.get("owner")
-        if not author_info:
-            return Response({"detail": "author field missing."}, status=status.HTTP_400_BAD_REQUEST)
-
-        username = author_info.get("username")
-        password = author_info.get("password")
-
-        try:
-            author = User.objects.get(username=username)
-            if not author.check_password(password):
-                return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
-            if ticket_post.author != author:
-                return Response({"detail": "You are not the author of this post."}, status=status.HTTP_403_FORBIDDEN)
-
-        except User.DoesNotExist:
-            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # 필드 업데이트
+    # Retrieve and validate fields
         title = request.data.get("title")
         date = request.data.get("date")
         seat = request.data.get("seat")
@@ -213,25 +232,43 @@ class TicketPostDetailView(APIView):
         casting = request.data.get("casting")
         uploaded_file = request.FILES.get("uploaded_file")
         uploaded_seat_image = request.FILES.get("uploaded_seat_image")
-        
+
+        print(f"Request data: {request.data}")  # Debugging request data
+        print(f"Uploaded file: {uploaded_file}")  # Debugging uploaded file
+        print(f"Uploaded seat image: {uploaded_seat_image}")  # Debugging seat image
 
         if not title or not date or not seat or not price or not casting:
+            print("Missing required fields.")  # Debugging
             return Response({"detail": "Required fields missing."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 업데이트된 필드 적용
+        # Update ticket post fields
         ticket_post.title = title
         ticket_post.date = date
         ticket_post.seat = seat
         ticket_post.booking_details = booking_details
         ticket_post.price = price
         ticket_post.casting = casting
-        ticket_post.uploaded_file = uploaded_file
-        ticket_post.uploaded_seat_image = uploaded_seat_image
 
-        ticket_post.save(keyword=request.data.get('keyword', None))  # 좌석 이미지 처리
+        if uploaded_file:
+            ticket_post.uploaded_file = uploaded_file
+        if uploaded_seat_image:
+            ticket_post.uploaded_seat_image = uploaded_seat_image
 
-        serializer = TicketPostSerializer(instance=ticket_post)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        ticket_post.save(keyword=request.data.get('keyword', None))  # Save with additional processing if needed
+        print(f"TicketPost updated: {ticket_post}")  # Debugging
+
+        # Include absolute URLs for images in response
+        response_data = TicketPostSerializer(instance=ticket_post).data
+        response_data['uploaded_file_url'] = (
+            request.build_absolute_uri(ticket_post.uploaded_file.url)
+            if ticket_post.uploaded_file else None
+        )
+        response_data['uploaded_seat_image_url'] = (
+            request.build_absolute_uri(ticket_post.uploaded_seat_image.url)
+            if ticket_post.uploaded_seat_image else None
+        )
+        print(f"Response data: {response_data}")  # Debugging response data
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class TransferListView(APIView):
     @swagger_auto_schema(
@@ -242,15 +279,15 @@ class TransferListView(APIView):
     def get(self, request):
         user = request.user
         transfer_list = Ticket.objects.filter(
-            owner=user, status__in=['transfer_pending', 'transfer_completed']
+            owner=user, status__in=['waiting', 'transfer_pending', 'transfer_completed']
         ).order_by('-id')
 
         if not transfer_list.exists():
             return Response({"detail": "No transferred tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
-        transfer_serializer = TicketSerializer(transfer_list, many=True)
-        print(transfer_serializer.data)
-        return Response(transfer_serializer.data, status=status.HTTP_200_OK)
+        # context에 request를 전달
+        serializer = TicketSerializer(transfer_list, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ReceivedListView(APIView):
@@ -693,3 +730,66 @@ def extract_line_after_at_yes24(text):
     extracted_text = match.group(1).replace(' ', '')
 
     return extracted_text
+
+@api_view(['POST'])
+def post_tweet(request):
+    """
+    Handles tweet creation using Twitter API v2
+    """
+    print("DEBUG: Received request to post a tweet.")
+    tweet_content = request.data.get('tweetContent')  # Get tweet content from the request
+
+    if not tweet_content:
+        print("DEBUG: No tweet content provided.")
+        return JsonResponse({'message': '트윗 내용이 비어 있습니다.'}, status=400)
+
+    # Twitter API v2 URL and Bearer Token
+    url = "https://api.twitter.com/2/tweets"
+    bearer_token = getattr(settings, "BEARER_TOKEN", None)  # Ensure Bearer Token is set
+
+    if not bearer_token:
+        print("ERROR: Bearer token is not set in the settings.")
+        return JsonResponse({'message': 'Twitter Bearer Token이 설정되지 않았습니다.'}, status=500)
+
+    headers = {
+        "Authorization": f"Bearer {bearer_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "text": tweet_content  # Text content of the tweet
+    }
+
+    print(f"DEBUG: Twitter API URL: {url}")
+    print(f"DEBUG: Headers: {headers}")
+    print(f"DEBUG: Payload: {payload}")
+
+    try:
+        # Make POST request to Twitter API
+        response = requests.post(url, json=payload, headers=headers)
+
+        print(f"DEBUG: Response status code: {response.status_code}")
+        print(f"DEBUG: Response content: {response.text}")
+
+        # Check for errors in the response
+        if response.status_code != 201:
+            print("ERROR: Failed to post tweet.")
+            print(f"ERROR DETAILS: {response.json()}")
+            return JsonResponse({
+                'message': '트윗 게시 중 오류가 발생했습니다.',
+                'error': response.json()
+            }, status=response.status_code)
+
+        print("DEBUG: Tweet successfully posted.")
+        return JsonResponse({
+            'message': '트윗이 성공적으로 게시되었습니다.',
+            'tweet': response.json()  # Return the tweet data
+        }, status=201)
+
+    except requests.RequestException as e:
+        print("ERROR: An error occurred while posting the tweet.")
+        print(f"ERROR DETAILS: {e}")
+        return JsonResponse({
+            'message': 'Twitter API 요청 중 오류가 발생했습니다.',
+            'error': str(e)
+        }, status=500)
