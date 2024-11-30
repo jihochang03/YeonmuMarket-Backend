@@ -23,6 +23,7 @@ class Ticket(models.Model):
     title = models.CharField(max_length=255)
     date = models.DateField()
     seat = models.CharField(max_length=255)
+    booking_page = models.CharField(max_length=255, default="인터파크")
     booking_details = models.CharField(max_length=100, default='No discounts applied')
     price = models.DecimalField(max_digits=10, decimal_places=0)
     casting = models.CharField(max_length=255)
@@ -44,16 +45,13 @@ class Ticket(models.Model):
         return self.title
 
     def save(self, *args, **kwargs):
-        keyword = kwargs.pop('keyword', None)
-        super().save(*args, **kwargs)
-
-        # Mask booking details in the uploaded file
+        super().save(*args, **kwargs)  # 먼저 데이터베이스에 객체 저장
         if self.uploaded_file and not self.masked_file:
             self.process_and_save_masked_image()
-
-        # Process seat image
         if self.uploaded_seat_image and not self.processed_seat_image:
-            self.process_and_save_seat_image(keyword)
+            self.process_and_save_seat_image(self.keyword)
+        super().save(update_fields=["masked_file", "processed_seat_image"])  # 업데이트된 필드만 저장
+
 
     @staticmethod
     def normalize_filename(filename):
@@ -71,22 +69,28 @@ class Ticket(models.Model):
 
     def process_and_save_masked_image(self):
         if self.uploaded_file:
+            print("Opening uploaded file for masking...")  # 디버깅: 업로드된 파일 열기
             self.uploaded_file.open()
             image_data = self.uploaded_file.read()
             self.uploaded_file.close()
 
             image = Image.open(BytesIO(image_data))
+            print("Extracting text using Tesseract...")  # 디버깅: Tesseract OCR 사용
             draw = ImageDraw.Draw(image)
 
             data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang='kor')
+            print("OCR Data:", data)  # 디버깅: OCR 결과 출력
             for i in range(len(data['text'])):
                 if '번' in data['text'][i]:
                     x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                    print(f"Found text '{data['text'][i]}' at position ({x}, {y}, {w}, {h})")  # 디버깅: 텍스트 위치 출력
                     if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
+                        print("Masking text area...")  # 디버깅: 텍스트 영역 마스킹
                         image_width = image.width
                         draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
 
             output_image_name = self.normalize_filename(f"masked_{os.path.basename(self.uploaded_file.name)}")
+            print(f"Saving masked image as {output_image_name}")  # 디버깅: 마스킹된 이미지 저장
             output_image = BytesIO()
             image.save(output_image, format='JPEG')
             output_image.seek(0)
@@ -94,6 +98,7 @@ class Ticket(models.Model):
 
     def process_and_save_seat_image(self, keyword):
         if self.uploaded_seat_image:
+            print("Opening uploaded seat image for processing...")  # 디버깅: 업로드된 좌석 이미지 열기
             self.uploaded_seat_image.open()
             image_data = self.uploaded_seat_image.read()
             self.uploaded_seat_image.close()
@@ -102,25 +107,32 @@ class Ticket(models.Model):
             cv_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             if keyword == '티켓링크':
+                print("Processing seat image with no color (black mask)...")  # 디버깅: 검은색 마스크 처리
                 pil_image = draw_bounding_box_no_color_cv(cv_image)
             else:
+                print("Processing seat image with purple mask...")  # 디버깅: 보라색 마스크 처리
                 pil_image = draw_bounding_box_purple_cv(cv_image)
 
             output_image_name = self.normalize_filename(f"processed_{os.path.basename(self.uploaded_seat_image.name)}")
+            print(f"Saving processed seat image as {output_image_name}")  # 디버깅: 처리된 좌석 이미지 저장
             output_image = BytesIO()
             pil_image.save(output_image, format='JPEG')
             output_image.seek(0)
             self.processed_seat_image.save(output_image_name, File(output_image), save=True)
 
 
+
 class TicketPost(models.Model):
-    id = models.AutoField(primary_key=True)
+    ticket = models.OneToOneField(
+        Ticket,
+        primary_key=True,  # Use the ticket's ID as the primary key
+        on_delete=models.CASCADE
+    )
     author = models.ForeignKey(User, on_delete=models.CASCADE)
-    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"TicketPost {self.id} by {self.author}"
+        return f"TicketPost {self.ticket.id} by {self.author}"
 
 
 # Utility Functions

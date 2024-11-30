@@ -66,7 +66,7 @@ class TicketPostListView(APIView):
 
         print("Received data:", request.data)  # 요청 데이터 출력
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
-            return Response({"status": "error", "message": "Both files are required."}, status=400)
+            return Response({"status": "error", "message": "Both reservImage and seatImage files are required."}, status=400)
 
         # 요청 데이터 추출
         title = request.data.get("title")
@@ -74,16 +74,40 @@ class TicketPostListView(APIView):
         seat = request.data.get("seat")
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
+        booking_page=request.data.get("booking_page")
         casting = request.data.get("casting")
         uploaded_file = request.FILES['reservImage']
         uploaded_seat_image = request.FILES['seatImage']
         keyword = request.data.get("keyword")
         phone_last_digits = request.data.get("phone_last_digits")
 
-        # 필수 필드 확인
-        if not title or not date or not seat or not price or not casting:
-            print("필수 필드가 누락되었습니다.")  # 디버깅: 필수 필드 누락 여부 확인
-            return Response({"detail": "필수 항목이 누락되었습니다."}, status=status.HTTP_400_BAD_REQUEST)
+        # 오류 메시지를 담을 리스트
+        errors = {}
+
+        # 필수 필드 검증
+        if not title:
+            errors["title"] = "제목은 필수 입력 사항입니다."
+        if not date:
+            errors["date"] = "날짜는 필수 입력 사항입니다."
+        if not seat:
+            errors["seat"] = "좌석 정보는 필수 입력 사항입니다."
+        if not price:
+            errors["price"] = "가격은 필수 입력 사항입니다."
+        elif not price.isdigit() or int(price) <= 0:
+            errors["price"] = "유효한 가격을 입력해야 합니다. 가격은 숫자여야 하며 0보다 커야 합니다. '원' 단위는 붙이지 마세요 ex) 172000 "
+        if not casting:
+            errors["casting"] = "캐스팅 정보는 필수 입력 사항입니다."
+
+        # 검증 실패 시 오류 반환
+        if errors:
+            print("Validation errors:", errors)  # 디버깅: 검증 오류 출력
+            return Response(
+                {
+                    "detail": "입력값 검증 실패",  # 전체 오류 요약 메시지
+                    "errors": errors  # 필드별 오류 상세 메시지
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             # Ticket 객체 생성
@@ -93,6 +117,7 @@ class TicketPostListView(APIView):
                 seat=seat,
                 booking_details=booking_details,
                 price=price,
+                booking_page=booking_page,
                 casting=casting,
                 uploaded_file=uploaded_file,
                 uploaded_seat_image=uploaded_seat_image,
@@ -100,6 +125,8 @@ class TicketPostListView(APIView):
                 owner=user,  # 현재 로그인된 사용자
             )
             print("Ticket created:", ticket)
+            ticket.save()
+            
 
             # 관련 대화 생성
             conversation = Conversation.objects.create(
@@ -122,25 +149,14 @@ class TicketPostListView(APIView):
             return Response({"detail": f"오류 발생: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         # 성공적으로 생성된 경우의 응답
-        serializer = TicketPostSerializer(ticket_post)
+        serializer = TicketPostSerializer(ticket_post, context={'request': request})
         print("Serialized data:", serializer.data)  # 디버깅: 응답으로 보낼 데이터 출력
 
         # 응답 데이터에 ticket_id 추가
         response_data = serializer.data
         response_data["ticket_id"] = ticket.id
 
-        current_site = get_current_site(request)
-        domain = current_site.domain
-
-        # Construct the full URL for the processed seat image
-        if ticket.processed_seat_image:
-            processed_seat_image_url = request.build_absolute_uri(ticket.processed_seat_image.url)
-            print(f"Processed Seat Image URL: {processed_seat_image_url}")
-        else:
-            processed_seat_image_url = None
-            print("Processed Seat Image does not exist")
-
-        response_data["masked_seat_image_url"] = processed_seat_image_url
+        response_data["masked_seat_image_url"] = serializer.data['ticket']['uploaded_processed_seat_image_url']
 
         # Debugging: Log the full response data
         print(f"Response Data: {response_data}")
@@ -156,119 +172,98 @@ class TicketPostDetailView(APIView):
     )
     def get(self, request, ticket_post_id):
         try:
-            ticket_post = TicketPost.objects.get(id=ticket_post_id)
+            ticket_post = TicketPost.objects.get(ticket_id=ticket_post_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = TicketPostSerializer(ticket_post, context={'request': request})
+        print(serializer.data)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-        # Include absolute URLs for uploaded_file and uploaded_seat_image
-        ticket_post_data = TicketPostSerializer(instance=ticket_post).data
-        ticket_post_data['uploaded_file_url'] = (
-            request.build_absolute_uri(ticket_post.uploaded_file.url)
-            if ticket_post.uploaded_file else None
-        )
-        ticket_post_data['uploaded_seat_image_url'] = (
-            request.build_absolute_uri(ticket_post.uploaded_seat_image.url)
-            if ticket_post.uploaded_seat_image else None
-        )
-        return Response(ticket_post_data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
         operation_id="티켓 양도글 삭제",
         operation_description="티켓 양도글을 삭제합니다.",
-        request_body=SignInRequestSerializer,
+        request_body=None,
         responses={204: "No Content", 404: "Not Found", 400: "Bad Request"},
     )
     def delete(self, request, ticket_post_id):
         try:
-            ticket_post = TicketPost.objects.get(id=ticket_post_id)
-        except Ticket.DoesNotExist:
-            return Response({"detail": "Post Not found."}, status=status.HTTP_404_NOT_FOUND)
+            ticket_post = TicketPost.objects.get(ticket_id=ticket_post_id)
+        except TicketPost.DoesNotExist:
+            return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        author_info = request.data
-        if not author_info:
-            return Response({"detail": "author field missing."}, status=status.HTTP_400_BAD_REQUEST)
-
-        username = author_info.get("username")
-        password = author_info.get("password")
+        # Check if the user is authorized to delete the post
+        if request.user != ticket_post.author:
+            return Response({"detail": "You are not authorized to delete this post."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            author = User.objects.get(username=username)
-            if not author.check_password(password):
-                return Response({"detail": "Password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
-            if ticket_post.author != author:
-                return Response({"detail": "You are not the author of this post."}, status=status.HTTP_403_FORBIDDEN)
+            # Delete associated ticket and conversation
+            ticket = ticket_post.ticket
+            Conversation.objects.filter(ticket=ticket).delete()
+            ticket.delete()
 
-        except User.DoesNotExist:
-            return Response({"detail": "User Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # ticket - ticket_post를 one-to-one으로 한다면 ticket.delete()
-        # ticket -ticket_post를 one-to-many로 한다면 ticket_post.delete() 
-        ticket_post.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+            # Delete the TicketPost
+            ticket_post.delete()
+            return Response({"detail": "Ticket and TicketPost deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            print(f"Error while deleting: {str(e)}")
+            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @swagger_auto_schema(
     operation_id="티켓 양도글 수정",
     operation_description="티켓 양도글을 수정합니다.",
     request_body=TicketPostDetailRequestSerializer,
     responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
-    )
+)
     def put(self, request, ticket_post_id):
         try:
-            ticket_post = TicketPost.objects.get(id=ticket_post_id)
-            print(f"TicketPost found: {ticket_post}")  # Debugging
+            # Fetch the TicketPost and associated Ticket
+            ticket_post = TicketPost.objects.get(ticket_id=ticket_post_id)
+            ticket = ticket_post.ticket
         except TicketPost.DoesNotExist:
-            print(f"TicketPost with id {ticket_post_id} not found.")  # Debugging
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Retrieve and validate fields
-        title = request.data.get("title")
-        date = request.data.get("date")
-        seat = request.data.get("seat")
-        booking_details = request.data.get("booking_details")
-        price = request.data.get("price")
-        casting = request.data.get("casting")
-        uploaded_file = request.FILES.get("uploaded_file")
-        uploaded_seat_image = request.FILES.get("uploaded_seat_image")
+        # Authorization check
+        if request.user != ticket_post.author:
+            return Response({"detail": "You are not authorized to edit this post."}, status=status.HTTP_403_FORBIDDEN)
 
-        print(f"Request data: {request.data}")  # Debugging request data
-        print(f"Uploaded file: {uploaded_file}")  # Debugging uploaded file
-        print(f"Uploaded seat image: {uploaded_seat_image}")  # Debugging seat image
+        # Handle updates dynamically
+        update_fields = [
+            "title",
+            "date",
+            "seat",
+            "booking_details",
+            "price",
+            "booking_page",
+            "casting",
+            "phone_last_digits",
+        ]
+        for field in update_fields:
+            value = request.data.get(field)
+            if value is not None:  # Only update non-empty fields
+                setattr(ticket, field, value)
 
-        if not title or not date or not seat or not price or not casting:
-            print("Missing required fields.")  # Debugging
-            return Response({"detail": "Required fields missing."}, status=status.HTTP_400_BAD_REQUEST)
+        # Handle file uploads
+        if uploaded_file := request.FILES.get("uploaded_file"):
+            ticket.uploaded_file = uploaded_file
+        if uploaded_seat_image := request.FILES.get("uploaded_seat_image"):
+            ticket.uploaded_seat_image = uploaded_seat_image
 
-        # Update ticket post fields
-        ticket_post.title = title
-        ticket_post.date = date
-        ticket_post.seat = seat
-        ticket_post.booking_details = booking_details
-        ticket_post.price = price
-        ticket_post.casting = casting
+        try:
+            # Save the ticket and associated post
+            ticket.save()
+            ticket_post.save()
 
-        if uploaded_file:
-            ticket_post.uploaded_file = uploaded_file
-        if uploaded_seat_image:
-            ticket_post.uploaded_seat_image = uploaded_seat_image
+            # Serialize updated data
+            serializer = TicketPostSerializer(ticket_post, context={"request": request})
+            response_data = serializer.data
+            response_data["masked_seat_image_url"] = serializer.data["ticket"]["uploaded_processed_seat_image_url"]
 
-        ticket_post.save(keyword=request.data.get('keyword', None))  # Save with additional processing if needed
-        print(f"TicketPost updated: {ticket_post}")  # Debugging
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error while updating: {str(e)}")
+            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Include absolute URLs for images in response
-        response_data = TicketPostSerializer(instance=ticket_post).data
-        response_data['uploaded_file_url'] = (
-            request.build_absolute_uri(ticket_post.uploaded_file.url)
-            if ticket_post.uploaded_file else None
-        )
-        response_data['uploaded_seat_image_url'] = (
-            request.build_absolute_uri(ticket_post.uploaded_seat_image.url)
-            if ticket_post.uploaded_seat_image else None
-        )
-        print(f"Response data: {response_data}")  # Debugging response data
-        return Response(response_data, status=status.HTTP_200_OK)
 
 class TransferListView(APIView):
     @swagger_auto_schema(
@@ -299,13 +294,13 @@ class ReceivedListView(APIView):
     def get(self, request):
         user = request.user
         received_list = Ticket.objects.filter(
-            transferee=user, status__in=['transfer_pending', 'transfer_completed']
+            transferee=user
         ).order_by('-id')
 
         if not received_list.exists():
             return Response({"detail": "No received tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
-        received_serializer = TicketSerializer(received_list, many=True)
+        received_serializer = TicketSerializer(received_list, many=True, context={'request': request})
         return Response(received_serializer.data, status=status.HTTP_200_OK)
     
 import logging
@@ -324,6 +319,8 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
     ],
     responses={200: '성공 시 예매 정보를 반환합니다.'}
 )
+
+
 
 @csrf_exempt
 @api_view(['POST'])

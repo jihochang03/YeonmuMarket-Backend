@@ -3,6 +3,7 @@ from .views import (
     JoinConversationView, ConversationDetailView, TransferIntentView,
     PaymentCompleteView, ConfirmReceiptView, LeaveConversationView
 )
+from .views import fetch_image
 
 urlpatterns = [
     path('join/<int:ticket_id>/', JoinConversationView.as_view(), name='join-conversation'),
@@ -11,4 +12,5 @@ urlpatterns = [
     path('<int:ticket_id>/payment-complete/', PaymentCompleteView.as_view(), name='payment-complete'),
     path('<int:ticket_id>/confirm-receipt/', ConfirmReceiptView.as_view(), name='confirm-receipt'),
     path('<int:ticket_id>/leave/', LeaveConversationView.as_view(), name='leave-conversation'),
+    path('fetch_image', fetch_image, name='fetch_image'),
 ]
