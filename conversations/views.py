@@ -2,7 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Conversation
-from tickets.models import Ticket
+from tickets.models import Ticket, TicketPost
+from tickets.serializers import TicketSerializer, TicketPostSerializer
 from drf_yasg.utils import swagger_auto_schema
 from user.models import UserProfile
 from payments.models import Account
@@ -15,6 +16,9 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from rest_framework import status
 from django.http import HttpResponseRedirect
+from django.http import HttpResponse, JsonResponse
+from django.conf import settings
+import os
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -37,15 +41,15 @@ class JoinConversationView(APIView):
             if not request.user.is_authenticated:
                 print(f"[JoinConversationView] User not authenticated. Redirecting to Kakao login.")
                 kakao_login_url = f"{reverse('user:kakao-login')}?next=/chat/{ticket_id}/join"
-    
+
                 # Return JSON response with redirect URL
                 return Response(
-                {
-                    "detail": "User not authenticated. Redirecting to Kakao login.",
-                    "redirect_url": kakao_login_url
-                },
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+                    {
+                        "detail": "User not authenticated. Redirecting to Kakao login.",
+                        "redirect_url": kakao_login_url
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
             ticket = Ticket.objects.get(id=ticket_id)
             print(f"[JoinConversationView] Ticket found: {ticket}")
@@ -57,25 +61,32 @@ class JoinConversationView(APIView):
             if user == conversation.owner:
                 print(f"[JoinConversationView] Conversation is yours: {conversation.owner}")
                 chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
-                return Response({"detail": "Conversation is yours.", "redirect_url": chat_url},status=status.HTTP_200_OK)
+                return Response({"detail": "Conversation is yours.", "redirect_url": chat_url}, status=status.HTTP_200_OK)
             
+            # If the conversation is full
             elif conversation.transferee and conversation.transferee != user:
                 print(f"[JoinConversationView] Conversation full or already joined by another user: {conversation.transferee}")
                 return Response({"detail": "Conversation full or already joined."}, status=status.HTTP_403_FORBIDDEN)
 
+            # If the conversation is not full, assign transferee and update status
             elif not conversation.transferee:
                 conversation.transferee = user
                 conversation.save()
+                ticket.transferee=user
+                ticket.save()
                 print(f"[JoinConversationView] User {user} joined the conversation {conversation}")
-                # Return masked file and seat image for the transferee
-                return Response({
-                    "detail": "You have joined the conversation.",
-                    "conversation_id": conversation.id,
-                    "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
-                }, status=status.HTTP_200_OK)
-            
-            print(f"[JoinConversationView] User {user} rejoined the conversation {conversation}")
-            return Response({"detail": "You have joined the conversation."}, status=status.HTTP_200_OK)
+
+            # Update ticket status to 'transfer_pending'
+            ticket.status = 'transfer_pending'
+            ticket.save()
+            print(f"[JoinConversationView] Ticket status updated to 'transfer_pending': {ticket.status}")
+
+            chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
+            return Response({
+                "detail": "You have joined the conversation.",
+                "redirect_url": chat_url,
+                "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
+            }, status=status.HTTP_200_OK)
 
         except Ticket.DoesNotExist:
             print(f"[JoinConversationView] Ticket with id {ticket_id} does not exist.")
@@ -83,6 +94,7 @@ class JoinConversationView(APIView):
         except Exception as e:
             print(f"[JoinConversationView] An unexpected error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class ConversationDetailView(APIView):
 
     @swagger_auto_schema(
@@ -99,10 +111,29 @@ class ConversationDetailView(APIView):
         try:
             user = request.user
             print(f"[ConversationDetailView] Request user: {user}, is_authenticated: {user.is_authenticated}")
+
+            # Ticket 가져오기
             ticket = Ticket.objects.get(id=ticket_id)
             print(f"[ConversationDetailView] Ticket found: {ticket}")
+
+            # TicketPost 가져오기
+            try:
+                ticket_post = TicketPost.objects.get(ticket=ticket)  # `ticket_id`를 `ticket`으로 연결
+            except TicketPost.DoesNotExist:
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # TicketPost의 ticket 정보 동기화
+            ticket_post.ticket = ticket
+
+            # 직렬화
+            serializer = TicketPostSerializer(ticket_post, context={'request': request})
+
+            # Conversation 가져오기
             conversation = Conversation.objects.get(ticket=ticket)
             print(f"[ConversationDetailView] Conversation retrieved: {conversation}")
+
+            # Account 가져오기
+            account = Account.objects.get(user=ticket.owner)
 
             # Check if the user is part of the conversation
             if user != conversation.owner and user != conversation.transferee:
@@ -112,46 +143,50 @@ class ConversationDetailView(APIView):
             # Prepare the data to return
             data = {
                 "conversation_id": conversation.id,
-                "ticket_id": ticket.id,
-                "title": ticket.title,
+                #"ticket_id": ticket.id,
+                #"title": ticket.title,
                 "transaction_step": conversation.transaction_step,
                 "user_role": "seller" if user == conversation.owner else "buyer",
-                "masked_file_url": None,
-                "seat_image_url": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None,
-                "bank_account": None,
-                "bank_name": None,
-                "account_holder": None,
-                "ticket_file_url": None,
-                "phone_last_digits": None,
+                #"masked_file_url": ticket.masked_file.url if ticket.masked_file else None,
+                #"seat_image_url": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None,
+                "bank_account": account.bank_account,
+                "bank_name": account.bank_name,
+                "account_holder": account.account_holder,
+                #"ticket_file_url": ticket.uploaded_file.url if ticket.uploaded_file else None,
+                #"phone_last_digits": ticket.phone_last_digits,
                 "buyer_name": conversation.transferee.username if conversation.transferee else '',
                 "seller_name": conversation.owner.username,
             }
-            print(f"[ConversationDetailView] Response data prepared: {data}")
+            response_data = {
+            "conversation_data": data,
+            "ticket_post_data": serializer.data,
+            }
+            print(f"[ConversationDetailView] Response data prepared: {response_data}")
 
-            # Include bank account info if transfer intents are confirmed
-            if conversation.transaction_step >= 2:
-                data["masked_file_url"] = ticket.masked_file.url if ticket.masked_file else None
+            # # Include bank account info if transfer intents are confirmed
+            # if conversation.transaction_step >= 2:
+            #     data["masked_file_url"] = ticket.masked_file.url if ticket.masked_file else None
 
-                try:
-                    transferor_account = Account.objects.get(user=conversation.owner)
-                    print(f"[ConversationDetailView] Transferor account: {transferor_account}")
-                    data["bank_account"] = transferor_account.bank_account
-                    data["bank_name"] = transferor_account.bank_name
-                    data["account_holder"] = transferor_account.user.username  # 또는 이름 필드 사용
-                except Account.DoesNotExist:
-                    print("[ConversationDetailView] No account found for the transferor.")
-                    data["bank_account"] = None
-                    data["bank_name"] = None
-                    data["account_holder"] = None
+            #     try:
+            #         transferor_account = Account.objects.get(user=conversation.owner)
+            #         print(f"[ConversationDetailView] Transferor account: {transferor_account}")
+            #         data["bank_account"] = transferor_account.bank_account
+            #         data["bank_name"] = transferor_account.bank_name
+            #         data["account_holder"] = transferor_account.user.username  # 또는 이름 필드 사용
+            #     except Account.DoesNotExist:
+            #         print("[ConversationDetailView] No account found for the transferor.")
+            #         data["bank_account"] = None
+            #         data["bank_name"] = None
+            #         data["account_holder"] = None
 
-            # Include ticket file and phone number if transfer is complete
-            if conversation.transaction_step >= 4:
-                data["ticket_file_url"] = ticket.uploaded_file.url if ticket.uploaded_file else None
-                data["seat_image_url"] = ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
-                transferor_profile = UserProfile.objects.get(user=conversation.owner)
-                data["phone_last_digits"] = transferor_profile.phone_last_digits
+            # # Include ticket file and phone number if transfer is complete
+            # if conversation.transaction_step >= 4:
+            #     data["ticket_file_url"] = ticket.uploaded_file.url if ticket.uploaded_file else None
+            #     data["seat_image_url"] = ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
+            #     transferor_profile = UserProfile.objects.get(user=conversation.owner)
+            #     data["phone_last_digits"] = transferor_profile.phone_last_digits
 
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Ticket.DoesNotExist:
             print(f"[ConversationDetailView] Ticket with id {ticket_id} does not exist.")
@@ -162,6 +197,24 @@ class ConversationDetailView(APIView):
         except Exception as e:
             print(f"[ConversationDetailView] An unexpected error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def fetch_image(request):
+    """
+    Fetches an image from a given URL path and returns it.
+    """
+    image_url = request.GET.get("url")  # 프론트엔드에서 전달받은 URL
+    if not image_url:
+        return JsonResponse({"error": "URL parameter is required."}, status=400)
+
+    # MEDIA_ROOT 기준으로 절대 경로 계산
+    image_path = os.path.join(settings.MEDIA_ROOT, image_url.replace(settings.MEDIA_URL, ""))
+    
+    if not os.path.exists(image_path):
+        return JsonResponse({"error": "Image not found."}, status=404)
+
+    # 이미지 파일 읽기 및 반환
+    with open(image_path, "rb") as image_file:
+        return HttpResponse(image_file.read(), content_type="image/jpeg")
 
 class TransferIntentView(APIView):
     @swagger_auto_schema(
@@ -207,13 +260,13 @@ class TransferIntentView(APIView):
 
             # If both intents are confirmed, include bank account info
             if conversation.is_transfer_intent and conversation.is_acceptance_intent:
-                transferor_profile = UserProfile.objects.get(user=conversation.owner)
-                print(f"[TransferIntentView] Both intents confirmed. Transferor profile: {transferor_profile}")
+                transferor_account = Account.objects.get(user=conversation.owner)
+                print(f"[TransferIntentView] Both intents confirmed. Transferor profile: {transferor_account}")
                 return Response({
                     "detail": "Both intents confirmed.",
-                    "bank_account": transferor_profile.bank_account,
-                    "bank_name": transferor_profile.bank_name,
-                    "account_holder": transferor_profile.bank_account_holder
+                    "bank_account": transferor_account.bank_account,
+                    "bank_name": transferor_account.bank_name,
+                    "account_holder": transferor_account.bank_account_holder
                 }, status=status.HTTP_200_OK)
 
             return Response({"detail": "Intent marked."}, status=status.HTTP_200_OK)
@@ -311,9 +364,8 @@ class ConfirmReceiptView(APIView):
             print(f"[ConfirmReceiptView] Ticket updated: {ticket}")
 
             # Return ticket file and seller's phone last digits
-            transferor_profile = UserProfile.objects.get(user=conversation.owner)
-            phone_last_digits = transferor_profile.phone_last_digits
-            print(f"[ConfirmReceiptView] Transferor profile: {transferor_profile}")
+            phone_last_digits = ticket.phone_last_digits
+            print(f"[ConfirmReceiptView] Transferor profile: {phone_last_digits}")
 
             return Response({
                 "detail": "Transfer completed.",
@@ -340,20 +392,34 @@ class LeaveConversationView(APIView):
             404: "Conversation not found."
         }
     )
-    def post(self, request, conversation_id):
-        print(f"[LeaveConversationView] POST called with conversation_id: {conversation_id}")
+    def post(self, request, ticket_id):
+        print(f"[LeaveConversationView] POST called with conversation_id: {ticket_id}")
         try:
-            conversation = Conversation.objects.get(id=conversation_id)
-            print(f"[LeaveConversationView] Conversation found: {conversation}")
             user = request.user
-            print(f"[LeaveConversationView] Request user: {user}, is_authenticated: {user.is_authenticated}")
-
+            print(f"[LeaveConversationView]Request user: {user}, is_authenticated: {user.is_authenticated}")
+            ticket = Ticket.objects.get(id=ticket_id)
+            print(f"[LeaveConversationView] Ticket found: {ticket}")
+            conversation = Conversation.objects.get(ticket=ticket)
+            print(f"[LeaveConversationView] Conversation found: {conversation}")
             # Only the transferee can leave the conversation
             if conversation.transferee != user:
                 print(f"[LeaveConversationView] User {user} is not the transferee")
                 return Response({"detail": "You are not part of this conversation."}, status=status.HTTP_403_FORBIDDEN)
 
             # Reset the transferee and transaction step
+            ticket.transferee = None
+            ticket.status = "waiting"
+            ticket.save()
+            # TicketPost 가져오기
+            try:
+                ticket_post = TicketPost.objects.get(ticket=ticket)  # `ticket_id`를 `ticket`으로 연결
+            except TicketPost.DoesNotExist:
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # TicketPost의 ticket 정보 동기화
+            ticket_post.ticket = ticket
+            ticket_post.save()
+            
             conversation.transferee = None
             conversation.transaction_step = 0
             conversation.is_transfer_intent = False
