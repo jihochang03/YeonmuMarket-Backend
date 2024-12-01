@@ -51,7 +51,6 @@ class AccountRegisterView(APIView):
             return Response({"detail": "Please sign in"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            account = Account.objects.get(user=user)
             print("Account already exists for user:", user)
             user_profile = UserProfile.objects.get(user=user)
             user_profile.is_payment_verified = True
@@ -60,10 +59,12 @@ class AccountRegisterView(APIView):
         except Account.DoesNotExist:
             data = json.loads(request.body)
             print("Request Data:", data)
-
+            
+            
             bank_account = data.get("accountNum")
             bank_name = data.get("bank")
             account_holder =data.get("account_holder")
+            is_payment_verified=True
             print("Bank Account:", bank_account)
             print("Bank Name:", bank_name)
             print("account_holder:", account_holder)
@@ -76,13 +77,17 @@ class AccountRegisterView(APIView):
                                 #status=status.HTTP_404_NOT_FOUND)
 
             # Serializer 초기화 및 검증
-            data = {'bank_account': bank_account, 'bank_name': bank_name, 'account_holder': account_holder}
-            serializer = AccountSerializer(data=data)
-            print("Serializer Data:", serializer.initial_data)
-
+            serializer_data = {
+                "bank_account": bank_account,
+                "bank_name": bank_name,
+                "account_holder": account_holder,
+                "is_payment_verified": True,  # Add this field
+            }
+            serializer = AccountSerializer(data=serializer_data)
+    
             if serializer.is_valid():
                 print("Serializer is valid")
-                serializer.save(user=user)
+                account = serializer.save(user=user) 
 
                 # 유저 프로필 업데이트
                 user_profile = UserProfile.objects.get(user=user)
@@ -91,7 +96,7 @@ class AccountRegisterView(APIView):
 
                 return Response({
                     "detail": "Account registered successfully.",
-                    "account": serializer.data
+                    "account":AccountSerializer(account).data
                 }, status=status.HTTP_201_CREATED)
             else:
                 print("Serializer errors:", serializer.errors)
@@ -122,35 +127,39 @@ class AccountRegisterView(APIView):
             }
         )}
     )
-    def put(self, request: HttpRequest):
+    def put(self, request):
         user = request.user
+        print(request.data)
         try:
-            account = Account.objects.get(user=user)
             data = request.data
-
             bank_account = data.get("accountNum")
             bank_name = data.get("bank")
             account_holder = data.get("account_holder")
 
+            # Check for required fields
             if not bank_account or not bank_name or not account_holder:
                 return Response({"detail": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+            serializer_data = {
+                "bank_account": bank_account,
+                "bank_name": bank_name,
+                "account_holder": account_holder,
+                "is_payment_verified": True,  # Add this field
+            }
+            # Serialize and save the data
+            serializer = AccountSerializer(data=serializer_data)
+            if serializer.is_valid():
+                account = serializer.save(user=user)  # Pass the user to the save method
+                return Response({
+                    "detail": "Account modified successfully.",
+                    "account": AccountSerializer(account).data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # 계좌 유효성 검사 등 필요한 로직 추가 가능
+        except Exception as e:
+            print("Error updating account:", e)
+            return Response({"detail": "An error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            account.bank_account = bank_account
-            account.bank_name = bank_name
-            account.account_holder = account_holder
-            account.save()
-
-            serializer = AccountSerializer(account)
-            return Response({
-                "detail": "Account modified successfully.",
-                "account": serializer.data
-            }, status=status.HTTP_200_OK)
-
-        except Account.DoesNotExist:
-            return Response({"detail": "Account does not exist."}, status=status.HTTP_404_NOT_FOUND)
-        
     @swagger_auto_schema(
         operation_id="계좌 정보 삭제",
         operation_description="계좌 정보를 삭제합니다.",
@@ -214,7 +223,8 @@ class AccountDetailView(APIView):
             account_info = Account.objects.get(user=user)
             return Response({
             "bank_account": account_info.bank_account,
-            "bank_name": account_info.bank_name
-             }, status=status.HTTP_200_OK)
+            "bank_name": account_info.bank_name,
+            "account_holder": account_info.account_holder
+            }, status=status.HTTP_200_OK)
         except Account.DoesNotExist:
             return Response({"detail": "No account linked to the user."}, status=status.HTTP_404_NOT_FOUND)
