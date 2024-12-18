@@ -15,7 +15,7 @@ from django.views import View
 import requests
 from .serializers import UserSerializer, UserProfileSerializer
 from .request_serializers import TokenRefreshRequestSerializer, SignOutRequestSerializer, UserProfileUpdateRequestSerializer
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
@@ -25,8 +25,9 @@ from rest_framework import status
 from django.db import transaction
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from user.models import UserProfile
+from user.models import UserProfile, UserFCMToken
 from payments.models import Account
+import json
 
 kakao_secret = settings.KAKAO_KEY
 kakao_redirect_uri = settings.KAKAO_REDIRECT_URI
@@ -37,7 +38,7 @@ def set_token_on_response_cookie(user, status_code) -> Response:
     serialized_data = UserProfileSerializer(userProfile).data
     res = Response(serialized_data, status=status_code)
     res.set_cookie("refresh_token", value=str(token))
-    res.set_cookie("access_token", value=str(token.access_token))
+    res.set_cookie("access_token", value=str(token.access_token), secure=True, samesite='None')
     return res
 
 class KakaoLoginView(View):
@@ -301,3 +302,18 @@ class UserAccountDeleteView(APIView):
         user.delete()
 
         return Response({"detail": "User account deleted successfully."}, status=status.HTTP_204_NO_CONTENT) 
+
+
+class SaveFcmTokenView(APIView):
+    def post(self, request: HttpRequest):
+        data = json.loads(request.body)
+        print(data)
+        token = data.get('token')
+        user = request.user  # 인증된 사용자로 토큰 저장
+        
+        if token:
+            UserFCMToken.objects.get_or_create(user=user, fcm_token=token)
+            return Response({"message": "success"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "Token is missing"}, status=status.HTTP_401_UNAUTHORIZED)
+    

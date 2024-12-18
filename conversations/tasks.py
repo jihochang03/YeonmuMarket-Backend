@@ -2,7 +2,8 @@ from celery import shared_task
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
 from .models import Conversation
-from tickets.models import TransferRequest
+# from tickets.models import TransferRequest
+from firebase_admin import messaging
 
 #이중에 사용할 task 골라서 사용할 예정. 
 
@@ -40,3 +41,9 @@ def notify_user_of_completion(user_email, ticket_id):
         [user_email],
         fail_silently=False,
     )
+
+def send_push_notification_to_user(token, title, body):
+    message = messaging.Message(notification=messaging.Notification(title=title, body=body), token=token)
+
+    response = messaging.send(message)
+    return response

@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Conversation
+from user.models import UserFCMToken
 from tickets.models import Ticket, TicketPost
 from tickets.serializers import TicketSerializer, TicketPostSerializer
 from drf_yasg.utils import swagger_auto_schema
@@ -15,10 +16,11 @@ from rest_framework.permissions import AllowAny
 from django.shortcuts import redirect
 from django.urls import reverse
 from rest_framework import status
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpRequest
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 import os
+from .tasks import send_push_notification_to_user
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -435,3 +437,13 @@ class LeaveConversationView(APIView):
         except Exception as e:
             print(f"[LeaveConversationView] An unexpected error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class TestPushNotificationView(APIView):
+    def get(self, request: HttpRequest):
+        user = request.user
+        try:
+            fcm_token = UserFCMToken.objects.get(user=user).fcm_token
+            send_push_notification_to_user(fcm_token, "테스트 push title", "테스트 push body")
+            return Response({"message": "Notification sent!"}, status=status.HTTP_200_OK)
+        except UserFCMToken.DoesNotExist:
+            return Response({"error": "FCM token not found"}, status=status.HTTP_400_BAD_REQUEST)

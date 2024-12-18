@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 import os, environ
 from datetime import timedelta
+import firebase_admin
+from firebase_admin import credentials
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,7 +32,7 @@ environ.Env.read_env(
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY =env('SECRET_KEY')
 KAKAO_KEY=env('KAKAO_KEY')
-KAKAO_REDIRECT_URI = 'http://localhost:5173/auth'
+KAKAO_REDIRECT_URI = 'https://localhost:5173/auth'
 DATABASE_PASSWORD=env('DATABASE_PASSWORD')
 DATABASE_HOST=env('DATABASE_HOST')
 CONSUMER_KEY=env('CONSUMER_KEY')
@@ -69,7 +71,8 @@ INSTALLED_APPS = [
     'drf_yasg',
     'conversations',
     'payments',
-    'django_extensions'
+    'django_extensions',
+    'sslserver',
 ]
 
 MIDDLEWARE = [
@@ -89,11 +92,8 @@ CSRF_COOKIE_SECURE = False  # HTTPS에서만 쿠키 전송 설정 (개발 환경
 CSRF_COOKIE_HTTPONLY = False
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",  # 프론트엔드 주소
-    "http://127.0.0.1:5173",
-    'http://localhost:8000'
+    'https://localhost:5173'
+    'http://localhost:8000',    
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -262,3 +262,6 @@ SOCIALACCOUNT_PROVIDERS = {
 
 ACCOUNT_AUTHENTICATION_METHOD = 'username_email'  # 이메일이나 사용자 이름 중 택 1
 ACCOUNT_EMAIL_VERIFICATION = 'none'  # 이메일 검증 비활성화 
+
+cred = credentials.Certificate(os.path.join(BASE_DIR, '.yeonmumarket-firebase.json'))
+firebase_admin.initialize_app(cred)
