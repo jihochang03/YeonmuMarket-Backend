@@ -62,14 +62,17 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://www.yeonmu.shop",
-    "https://2024-fw-project.fly.dev",  # 배포된 React 주소를 추가할 경우
+    "https://api.yeonmu.shop",  # 배포된 React 주소를 추가할 경우
+    "https://*.fly.dev",
 ]
-CSRF_COOKIE_SECURE = True  # HTTPS 전용
-CSRF_COOKIE_HTTPONLY = False  # JS에서 접근 가능
-CSRF_COOKIE_SAMESITE = "None"  # CORS 환경에서 필요
+CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_DOMAIN = ".yeonmu.shop"  # 최상위 도메인
+CSRF_COOKIE_SAMESITE = "None"        # CORS 환경 허용
 CSRF_TRUSTED_ORIGINS = [
-    "https://2024-fw-project.fly.dev",  # Fly.io 도메인
+    "https://api.yeonmu.shop",  # Fly.io 도메인
     "https://www.yeonmu.shop",  
+    "https://*.fly.dev",
 ]
 CORS_ALLOW_HEADERS = [
     "accept",

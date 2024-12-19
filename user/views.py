@@ -39,23 +39,29 @@ def set_token_on_response_cookie(user, status_code) -> Response:
     res.set_cookie(
         "refresh_token",
         value=str(token),
-        #httponly=True,
-        #secure=False,  # HTTPS 환경에서만 쿠키 전송
-        samesite="lax",  # CORS 정책
+        httponly=True,  # Only accessible via HTTP, improves security
+        secure=True,  # Ensures cookies are sent over HTTPS only
+        samesite="None",  # Required for cross-origin requests
+        domain=".yeonmu.shop",
     )
     res.set_cookie(
         "access_token",
         value=str(token.access_token),
-        httponly=True,
-        #secure=True,
-        samesite="lax",
+        httponly=True,  # Same as above
+        secure=True,
+        samesite="None",
+        domain=".yeonmu.shop",
     )
-    
     return res
+
+import logging
+
+logger = logging.getLogger("django")
 
 class KakaoLoginView(View):
     def get(self, request):
-        kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={kakao_secret}&redirect_uri={kakao_redirect_uri}&response_type=code"
+        kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={kakao_secret}&redirect_uri=https://www.yeonmu.shop/auth&response_type=code"
+        logger.info(f"Kakao redirect URI: {kakao_redirect_uri}")
         return redirect(kakao_auth_url)
 
 class TokenRefreshView(APIView):
