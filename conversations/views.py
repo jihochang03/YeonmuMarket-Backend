@@ -60,7 +60,7 @@ class JoinConversationView(APIView):
             # Redirect to chat page if the user is the owner of the conversation
             if user == conversation.owner:
                 print(f"[JoinConversationView] Conversation is yours: {conversation.owner}")
-                chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
+                chat_url = f"https://www.yeonmu.shop/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
                 return Response({"detail": "Conversation is yours.", "redirect_url": chat_url}, status=status.HTTP_200_OK)
             
             # If the conversation is full
@@ -81,7 +81,7 @@ class JoinConversationView(APIView):
             ticket.save()
             print(f"[JoinConversationView] Ticket status updated to 'transfer_pending': {ticket.status}")
 
-            chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
+            chat_url = f"https://www.yeonmu.shop/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
             return Response({
                 "detail": "You have joined the conversation.",
                 "redirect_url": chat_url,

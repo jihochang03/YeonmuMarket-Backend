@@ -1,0 +1,8 @@
+fly.toml
+.git/
+*.sqlite3
+media/
+*.pyc
+__pycache__/
+*.log
+node_modules/
