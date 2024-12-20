@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED 1
 
 # 필수 패키지 설치 (libGL 포함)
 RUN apt-get update && apt-get install -y \
-    libpq-dev gcc libgl1 libglib2.0-0 tesseract-ocr \
+    libpq-dev gcc libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-kor \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # 작업 디렉토리 설정
@@ -23,7 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # 필수 패키지 설치 (최종 이미지에서도 libGL 포함)
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 \
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-kor \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # 작업 디렉토리 설정
@@ -37,6 +37,9 @@ COPY . /code/
 
 # PATH 설정
 ENV PATH=/root/.local/bin:$PATH
+
+# Tesseract 경로 설정
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
 
 # 정적 파일 수집
 RUN python manage.py collectstatic --noinput
