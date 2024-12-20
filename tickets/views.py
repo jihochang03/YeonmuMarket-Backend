@@ -357,13 +357,17 @@ def process_image(request):
 
         try:
             image = Image.open(reserv_file_full_path)
-            logger.debug("Opened reservation image for OCR.")
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
             logger.debug("Extracted text: %s", extracted_text)
-        except pytesseract.TesseractNotFoundError as e:
-            logger.error("Tesseract not found: %s", str(e))
+        except pytesseract.TesseractError as e:
+            logger.error("Tesseract OCR error: %s", str(e))
+            extracted_text = None  # 기본값 설정
         except Exception as e:
             logger.error("Unexpected error during OCR: %s", str(e))
+            extracted_text = None  # 기본값 설정
+
+        if extracted_text is None:
+            return Response({"status": "error", "message": "OCR failed. Please check your image or Tesseract configuration."}, status=500)
 
         # keyword 별 처리
         if keyword == '인터파크':

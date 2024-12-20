@@ -23,7 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # 필수 패키지 설치 (최종 이미지에서도 libGL 포함)
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-kor \
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # 작업 디렉토리 설정
