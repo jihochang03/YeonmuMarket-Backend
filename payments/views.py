@@ -52,6 +52,7 @@ class AccountRegisterView(APIView):
     
 
     def post(self, request: HttpRequest):
+        logger.debug(f"Request User: {request.user} ({type(request.user)})")
         user = request.user
         logger.info("Post request received")
         logger.debug(f"Authenticated User: {user}")

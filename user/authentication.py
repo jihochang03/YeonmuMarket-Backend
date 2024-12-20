@@ -9,18 +9,23 @@ logger = logging.getLogger(__name__)
 class CookieJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
         logger.debug(f"Request Cookies: {request.COOKIES}")
-        # 쿠키에서 access_token 가져오기
         token = request.COOKIES.get("access_token")
         if not token:
-            return None  # 쿠키에 토큰이 없으면 인증 실패
+            logger.warning("Access token not found")
+            return None
 
         try:
-            # JWT 디코딩 및 검증
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            logger.debug(f"Decoded JWT Payload: {payload}")
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed("Token has expired")  # 만료된 토큰
+            raise AuthenticationFailed("Token has expired")
         except jwt.InvalidTokenError:
-            raise AuthenticationFailed("Invalid token")  # 잘못된 토큰
+            raise AuthenticationFailed("Invalid token")
 
-        # payload에는 사용자 정보가 포함되어 있을 가능성이 있음
-        return (payload, None)  # 인증된 사용자 정보와 None 반환
+        try:
+            user = User.objects.get(id=payload["id"])
+        except User.DoesNotExist:
+            raise AuthenticationFailed("User not found")
+
+        logger.debug(f"Authenticated User: {user}")
+        return (user, None)
