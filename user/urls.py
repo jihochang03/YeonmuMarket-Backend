@@ -1,10 +1,11 @@
 from django.urls import path
-from .views import KakaoSignInCallbackView, SignOutView, TokenRefreshView,  KakaoLoginView, UserProfileListView, UserProfileDetailView, CheckUsernameView,UserAccountDeleteView
+from .views import KakaoSignInCallbackView, SignOutView, TokenCSRFView, TokenRefreshView,  KakaoLoginView, UserProfileListView, UserProfileDetailView, CheckUsernameView,UserAccountDeleteView
 
 app_name = "user"
 urlpatterns = [
     path("signout/", SignOutView.as_view()),
     path("refresh/", TokenRefreshView.as_view()),
+    path("csrf/", TokenCSRFView.as_view()),
     path("userinfo/", UserProfileListView.as_view()),
     path("me/", UserProfileDetailView.as_view()),
     path("check/", CheckUsernameView.as_view()),

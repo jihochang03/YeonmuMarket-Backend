@@ -27,6 +27,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from user.models import UserProfile
 from payments.models import Account
+from django.middleware.csrf import get_token
 
 kakao_secret = settings.KAKAO_KEY
 kakao_redirect_uri = 'https://www.yeonmu.shop/auth'
@@ -64,6 +65,19 @@ class KakaoLoginView(View):
         logger.info(f"Kakao redirect URI: {kakao_redirect_uri}")
         return redirect(kakao_auth_url)
 
+class TokenCSRFView(APIView):
+    def get(self, request):
+        csrf_token = get_token(request)
+        response = Response({"detail": "token CSRF"}, status=status.HTTP_200_OK)
+        response.set_cookie(
+            key='csrftoken',
+            value=csrf_token,
+            domain='.yeonmu.shop',
+            secure=True,
+            httponly=False, # 반드시 False
+            samesite='None'
+        )
+        return response
 class TokenRefreshView(APIView):
     @swagger_auto_schema(
         operation_id="토큰 재발급",
