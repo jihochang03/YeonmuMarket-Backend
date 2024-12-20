@@ -3,6 +3,9 @@ import os
 import environ
 from datetime import timedelta
 import dj_database_url
+import pytesseract
+
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

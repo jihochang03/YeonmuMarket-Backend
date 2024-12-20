@@ -34,6 +34,9 @@ import requests
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 import logging
+import pytesseract
+
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 class TicketView(APIView):
     @swagger_auto_schema(
@@ -352,10 +355,15 @@ def process_image(request):
         seat_file_full_path = os.path.join(default_storage.location, seat_file_path)
         logger.debug("Seat image saved at: %s", seat_file_full_path)
 
-        # Tesseract OCR 처리
-        image = Image.open(reserv_file_full_path)
-        extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-        logger.debug("Extracted text from reservation image: %s", extracted_text)
+        try:
+            image = Image.open(reserv_file_full_path)
+            logger.debug("Opened reservation image for OCR.")
+            extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+            logger.debug("Extracted text: %s", extracted_text)
+        except pytesseract.TesseractNotFoundError as e:
+            logger.error("Tesseract not found: %s", str(e))
+        except Exception as e:
+            logger.error("Unexpected error during OCR: %s", str(e))
 
         # keyword 별 처리
         if keyword == '인터파크':
