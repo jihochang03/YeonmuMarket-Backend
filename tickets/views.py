@@ -358,7 +358,11 @@ def process_image(request):
         try:
             image = Image.open(reserv_file_full_path)
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-            logger.debug("Extracted text: %s", extracted_text)
+            logger.debug("Original Extracted text: %s", extracted_text)
+
+            # 줄바꿈과 모든 공백 제거
+            extracted_text = ''.join(extracted_text.split())
+            logger.debug("Processed text (no spaces or newlines): %s", extracted_text)
         except pytesseract.TesseractError as e:
             logger.error("Tesseract OCR error: %s", str(e))
             extracted_text = None  # 기본값 설정
