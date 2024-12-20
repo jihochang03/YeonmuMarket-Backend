@@ -33,6 +33,7 @@ from rest_framework.decorators import api_view, parser_classes, authentication_c
 import requests
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
+import logging
 
 class TicketView(APIView):
     @swagger_auto_schema(
@@ -328,47 +329,54 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 def process_image(request):
     permission_classes = [AllowAny]
     try:
-        # Ensure keyword and both files are present
+        # keyword 로깅
         keyword = request.POST.get('keyword', '').strip()
-        print("Keyword:", keyword)
+        logger.debug("Received keyword: %s", keyword)
 
+        # 파일 유무 확인
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
+            logger.warning("Missing files: reservImage or seatImage not provided.")
             return Response({"status": "error", "message": "Both files are required."}, status=400)
 
-        # Handle reservation image
+        # 예약 이미지 처리
         reserv_image = request.FILES['reservImage']
+        logger.debug("Reservation image file received: %s", reserv_image.name)
         reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
         reserv_file_full_path = os.path.join(default_storage.location, reserv_file_path)
+        logger.debug("Reservation image saved at: %s", reserv_file_full_path)
 
-        # Handle seat image
+        # 좌석 이미지 처리
         seat_image = request.FILES['seatImage']
+        logger.debug("Seat image file received: %s", seat_image.name)
         seat_file_path = default_storage.save(f'uploads/{seat_image.name}', seat_image)
         seat_file_full_path = os.path.join(default_storage.location, seat_file_path)
+        logger.debug("Seat image saved at: %s", seat_file_full_path)
 
-        # Process reservation image using pytesseract
+        # Tesseract OCR 처리
         image = Image.open(reserv_file_full_path)
         extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+        logger.debug("Extracted text from reservation image: %s", extracted_text)
 
-        # Depending on the keyword, process the image data
+        # keyword 별 처리
         if keyword == '인터파크':
-            # Process Interpark related data
             response_data = process_interpark_data(extracted_text)
-            print(response_data)
+            logger.debug("Interpark processed data: %s", response_data)
             return Response(response_data, status=200)
         elif keyword == '예스24':
-            # Process Yes24 related data
             response_data = process_yes24_data(extracted_text)
-            print(response_data)
+            logger.debug("Yes24 processed data: %s", response_data)
             return Response(response_data, status=200)
         elif keyword == '티켓링크':
-            # Process Ticketlink related data
             response_data = process_link_data(extracted_text)
-            print(response_data)
+            logger.debug("Ticketlink processed data: %s", response_data)
             return Response(response_data, status=200)
         else:
+            logger.warning("Invalid keyword provided: %s", keyword)
             return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
     except Exception as e:
+        # 예외 발생 시 전체 스택 트레이스 로그 기록
+        logger.exception("Exception occurred while processing images")
         return Response({"status": "error", "message": str(e)}, status=500)
 
 def process_link_data(extracted_text):
