@@ -527,6 +527,8 @@ def check_reservation_status(text):
     
     # if not match:
     #     raise ValueError("예매 상태 정보를 찾을 수 없습니다.")
+    if not match:
+        return ""
     
     reservation_status = match.group(1).strip()
     
