@@ -68,7 +68,7 @@ class KakaoLoginView(View):
 @method_decorator(csrf_exempt, name='dispatch')
 class TokenCSRFView(APIView):
     permission_classes = [AllowAny]
-    def get(self, request):
+    def post(self, request):
         csrf_token = get_token(request)
         response = Response({"detail": "token CSRF"}, status=status.HTTP_200_OK)
         response.set_cookie(
