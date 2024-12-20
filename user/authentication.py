@@ -3,6 +3,7 @@ from rest_framework.exceptions import AuthenticationFailed
 import jwt
 from django.conf import settings
 import logging
+from django.contrib.auth.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class CookieJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed("Invalid token")
 
         try:
-            user = User.objects.get(id=payload["id"])
+            user = User.objects.get(id=payload["user_id"])
         except User.DoesNotExist:
             raise AuthenticationFailed("User not found")
 
