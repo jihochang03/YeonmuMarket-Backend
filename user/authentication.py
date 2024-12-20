@@ -2,9 +2,13 @@ from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 import jwt
 from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CookieJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
+        logger.debug(f"Request Cookies: {request.COOKIES}")
         # 쿠키에서 access_token 가져오기
         token = request.COOKIES.get("access_token")
         if not token:
