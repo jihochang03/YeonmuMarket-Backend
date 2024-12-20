@@ -65,7 +65,9 @@ class KakaoLoginView(View):
         logger.info(f"Kakao redirect URI: {kakao_redirect_uri}")
         return redirect(kakao_auth_url)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class TokenCSRFView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request):
         csrf_token = get_token(request)
         response = Response({"detail": "token CSRF"}, status=status.HTTP_200_OK)
