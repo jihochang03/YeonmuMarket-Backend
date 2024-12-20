@@ -19,8 +19,10 @@ class CookieJWTAuthentication(BaseAuthentication):
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             logger.debug(f"Decoded JWT Payload: {payload}")
         except jwt.ExpiredSignatureError:
+            logger.warning("jwt.ExpiredSignatureError")
             raise AuthenticationFailed("Token has expired")
         except jwt.InvalidTokenError:
+            logger.warning("jwt.InvalidTokenError")
             raise AuthenticationFailed("Invalid token")
 
         try:
