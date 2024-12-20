@@ -86,24 +86,47 @@ class TokenRefreshView(APIView):
         operation_description="access 토큰을 재발급 받습니다.",
         request_body=TokenRefreshRequestSerializer,
         responses={200: UserSerializer, 400: "Bad Request", 401: "Unauthorized"},
-        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+        manual_parameters=[
+            openapi.Parameter(
+                "Authorization", openapi.IN_HEADER,
+                description="access token",
+                type=openapi.TYPE_STRING
+            )
+        ]
     )
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:
             return Response(
-                {"detail": "no refresh token"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "no refresh token provided"}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            RefreshToken(refresh_token).verify()
-        except:
+            # Refresh Token 검증
+            token = RefreshToken(refresh_token)
+            token.verify()
+        except Exception as e:
             return Response(
-                {"detail": "please signin again."}, status=status.HTTP_401_UNAUTHORIZED
+                {"detail": "Invalid or expired refresh token", "error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
             )
-        new_access_token = str(RefreshToken(refresh_token).access_token)
-        response = Response({"detail": "token refreshed"}, status=status.HTTP_200_OK)
-        response.set_cookie("access_token", value=str(new_access_token), httponly=True)
+
+        # 새로운 Access Token 생성
+        new_access_token = str(token.access_token)
+
+        # Access Token을 쿠키로 설정
+        response = Response(
+            {"detail": "Access token refreshed successfully"},
+            status=status.HTTP_200_OK
+        )
+        response.set_cookie(
+            "access_token",
+            value=new_access_token,
+            httponly=True,
+            secure=True,  # HTTPS를 사용하는 경우에만 활성화
+            max_age=15 * 60,  # Access Token 만료 시간 (15분)
+        )
         return response
 
 
