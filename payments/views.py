@@ -7,7 +7,12 @@ from .serializers import AccountSerializer
 from django.http import HttpRequest
 from .models import Account
 import json
+import logging
 from user.models import UserProfile
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG,  # 디버깅 로그를 출력
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from .crawling import check_account  # crawling.py의 함수 임포트
 class AccountRegisterView(APIView):
     @swagger_auto_schema(
@@ -42,66 +47,71 @@ class AccountRegisterView(APIView):
             )
         }
     )
+
+    # 로깅 설정
+    
+
     def post(self, request: HttpRequest):
         user = request.user
-        print("Authenticated User:", user)
+        logger.info("Post request received")
+        logger.debug(f"Authenticated User: {user}")
 
         if not user.is_authenticated:
-            print("User not authenticated")
+            logger.warning("User not authenticated")
             return Response({"detail": "Please sign in"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            print("Account already exists for user:", user)
+            # Check if the account already exists
+            logger.info(f"Checking if account exists for user: {user}")
             user_profile = UserProfile.objects.get(user=user)
             user_profile.is_payment_verified = True
             user_profile.save()
+            logger.info("Account already exists and is_payment_verified updated")
             return Response({"detail": "Account Already exists."}, status=status.HTTP_201_CREATED)
         except Account.DoesNotExist:
-            data = json.loads(request.body)
-            print("Request Data:", data)
-            
-            
+            logger.info("Account does not exist for user, creating a new account")
+
+            # Parse the request body
+            try:
+                data = json.loads(request.body)
+                logger.debug(f"Request Data: {data}")
+            except json.JSONDecodeError as e:
+                logger.error("Failed to decode request body", exc_info=True)
+                return Response({"detail": "Invalid request body"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Extract data from the request
             bank_account = data.get("accountNum")
             bank_name = data.get("bank")
-            account_holder =data.get("account_holder")
-            is_payment_verified=True
-            print("Bank Account:", bank_account)
-            print("Bank Name:", bank_name)
-            print("account_holder:", account_holder)
+            account_holder = data.get("account_holder")
+            logger.debug(f"Bank Account: {bank_account}, Bank Name: {bank_name}, Account Holder: {account_holder}")
 
-            # 계좌 유효성 검사
-            #is_valid_account = check_account(bank_account)
-            #if not is_valid_account:
-                #print("Account validation failed")
-                #return Response({"detail": "사기 계좌로 등록되었습니다"},
-                                #status=status.HTTP_404_NOT_FOUND)
-
-            # Serializer 초기화 및 검증
+            # Prepare serializer data
             serializer_data = {
                 "bank_account": bank_account,
                 "bank_name": bank_name,
                 "account_holder": account_holder,
-                "is_payment_verified": True,  # Add this field
+                "is_payment_verified": True,
             }
-            serializer = AccountSerializer(data=serializer_data)
-    
-            if serializer.is_valid():
-                print("Serializer is valid")
-                account = serializer.save(user=user) 
 
-                # 유저 프로필 업데이트
+            # Validate and save account data
+            serializer = AccountSerializer(data=serializer_data)
+            if serializer.is_valid():
+                logger.info("Serializer is valid, saving the account")
+                account = serializer.save(user=user)
+
+                # Update user profile
                 user_profile = UserProfile.objects.get(user=user)
                 user_profile.is_payment_verified = True
                 user_profile.save()
+                logger.info("Account registered successfully and user profile updated")
 
                 return Response({
                     "detail": "Account registered successfully.",
-                    "account":AccountSerializer(account).data
+                    "account": AccountSerializer(account).data
                 }, status=status.HTTP_201_CREATED)
             else:
-                print("Serializer errors:", serializer.errors)
-
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                logger.error("Serializer validation failed", extra={"errors": serializer.errors})
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     @swagger_auto_schema(
         operation_id="계좌 정보 수정",
