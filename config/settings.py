@@ -44,7 +44,8 @@ INSTALLED_APPS = [
     'drf_yasg',
     'conversations',
     'payments',
-    'django_extensions'
+    'django_extensions',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -113,6 +114,23 @@ DATABASES = {
     'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
 }
 
+# AWS S3 미디어 파일 설정
+AWS_REGION = 'ap-northeast-2'  # S3 버킷의 리전 (서울)
+AWS_STORAGE_BUCKET_NAME = ''  # S3 버킷 이름
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')  # 환경 변수에서 가져오기
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')  # 환경 변수에서 가져오기
+
+# S3에서 미디어 파일에 접근할 도메인 설정
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com'
+
+# 미디어 파일 경로
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'  # S3 버킷의 미디어 경로
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# 미디어 파일 루트
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # 로컬 미디어 디렉토리 (개발용)
+
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -138,10 +156,6 @@ USE_TZ = True
 # Static files
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

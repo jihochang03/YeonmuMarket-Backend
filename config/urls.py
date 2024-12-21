@@ -6,7 +6,14 @@ from drf_yasg import openapi
 from rest_framework.permissions import AllowAny
 from django.conf.urls.static import static
 from django.conf import settings
+import environ
 from user.views import KakaoLoginView, KakaoSignInCallbackView
+
+# 환경 변수 로드
+env = environ.Env(
+    DEBUG=(bool, False)  # Default to False for production
+)
+environ.Env.read_env(env_file=os.path.join(BASE_DIR, '.env'))
 # Swagger 관련 설정
 schema_view = get_schema_view(
     openapi.Info(
@@ -33,6 +40,21 @@ urlpatterns = [
     # path('api/kakao/callback/', KakaoSignInCallbackView.as_view(), name='kakao-callback'),
 ]
 
+# AWS S3 미디어 파일 설정
+AWS_REGION = 'ap-northeast-2'  # S3 버킷의 리전 (서울)
+AWS_STORAGE_BUCKET_NAME = 'your-s3-bucket-name'  # S3 버킷 이름
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')  # 환경 변수에서 가져오기
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')  # 환경 변수에서 가져오기
+
+# S3에서 미디어 파일에 접근할 도메인 설정
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com'
+
 # 개발 중 미디어 파일 서빙 설정
 if settings.DEBUG:  # 개발 환경에서만 미디어 파일 서빙
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # 로컬 개발 환경에서는 로컬에 미디어 파일 저장
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+else:
+    # 프로덕션 환경에서는 S3에 미디어 파일 저장
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
