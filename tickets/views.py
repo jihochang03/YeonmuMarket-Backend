@@ -61,15 +61,6 @@ class TicketView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class TicketPostListView(APIView):
-    @staticmethod
-    def generate_unique_filename(ticket_id, original_name, suffix=""):
-        """Generates a unique filename using the ticket ID and original file name."""
-        file_extension = original_name.split('.')[-1]
-        base_name = original_name[:-(len(file_extension) + 1)]
-        hashed_name = hashlib.md5(base_name.encode()).hexdigest()[:8]
-        unique_name = f"ticket_{ticket_id}_{suffix}_{hashed_name}.{file_extension}"
-        return unique_name
-
     def post(self, request):
         user = request.user
         if user.is_anonymous:
@@ -84,7 +75,6 @@ class TicketPostListView(APIView):
                 status=400,
             )
 
-        # 요청 데이터 추출
         title = request.data.get("title")
         date = request.data.get("date")
         seat = request.data.get("seat")
@@ -96,27 +86,8 @@ class TicketPostListView(APIView):
         uploaded_file = request.FILES["reservImage"]
         uploaded_seat_image = request.FILES["seatImage"]
 
-        # 필수 필드 검증
-        errors = {}
-        if not title:
-            errors["title"] = "제목은 필수 입력 사항입니다."
-        if not date:
-            errors["date"] = "날짜는 필수 입력 사항입니다."
-        if not seat:
-            errors["seat"] = "좌석 정보는 필수 입력 사항입니다."
-        if not price or not price.isdigit() or int(price) <= 0:
-            errors["price"] = "유효한 가격을 입력해야 합니다. 숫자여야 하며 0보다 커야 합니다."
-        if not casting:
-            errors["casting"] = "캐스팅 정보는 필수 입력 사항입니다."
-
-        if errors:
-            return Response(
-                {"detail": "입력값 검증 실패", "errors": errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         try:
-            # **1. Ticket 객체 생성**
+            # Ticket 객체 생성
             ticket = Ticket.objects.create(
                 title=title,
                 date=date,
@@ -129,34 +100,24 @@ class TicketPostListView(APIView):
                 owner=user,
             )
 
-            # **2. 파일 저장**
-            reserv_file_name = self.generate_unique_filename(ticket.id, uploaded_file.name, "reserv")
-            reserv_file_path = default_storage.save(f"tickets/{reserv_file_name}", uploaded_file)
+            # 파일 저장 경로 설정 및 URL 저장
+            reserv_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_file.name}", uploaded_file)
+            seat_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_seat_image.name}", uploaded_seat_image)
 
-            seat_file_name = self.generate_unique_filename(ticket.id, uploaded_seat_image.name, "seat")
-            seat_file_path = default_storage.save(f"tickets/{seat_file_name}", uploaded_seat_image)
-
-            # **3. Ticket 객체 업데이트**
-            ticket.uploaded_file = reserv_file_path
-            ticket.uploaded_seat_image = seat_file_path
+            ticket.uploaded_file_url = default_storage.url(reserv_path)
+            ticket.uploaded_seat_image_url = default_storage.url(seat_path)
             ticket.save()
 
-            # **4. Conversation 생성**
-            conversation = Conversation.objects.create(
-                ticket=ticket, owner=user, transferee=None
-            )
-
-            # **5. TicketPost 생성**
+            # TicketPost 생성
             ticket_post = TicketPost.objects.create(ticket=ticket, author=user)
 
         except Exception as e:
             return Response({"detail": f"오류 발생: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # **6. 응답 데이터 생성**
         serializer = TicketPostSerializer(ticket_post, context={"request": request})
         response_data = serializer.data
         response_data["ticket_id"] = ticket.id
-        response_data["masked_seat_image_url"] = ticket.processed_seat_image.url if ticket.processed_seat_image else None
+        response_data["masked_seat_image_url"] = ticket.processed_seat_image_url
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -169,12 +130,11 @@ class TicketPostDetailView(APIView):
     )
     def get(self, request, ticket_id):
         try:
-            ticket_post = TicketPost.objects.get(ticket_id=ticket_id)
+            ticket_post = TicketPost.objects.get(ticket__id=ticket_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = TicketPostSerializer(ticket_post, context={'request': request})
-        print(serializer.data)
+        serializer = TicketPostSerializer(ticket_post, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
@@ -183,48 +143,64 @@ class TicketPostDetailView(APIView):
         request_body=None,
         responses={204: "No Content", 404: "Not Found", 400: "Bad Request"},
     )
-    def delete(self, request, ticket_post_id):
+    def delete(self, request, ticket_id):
         try:
-            ticket_post = TicketPost.objects.get(ticket_id=ticket_post_id)
+            ticket_post = TicketPost.objects.get(ticket__id=ticket_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if the user is authorized to delete the post
         if request.user != ticket_post.author:
-            return Response({"detail": "You are not authorized to delete this post."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "You are not authorized to delete this post."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         try:
             # Delete associated ticket and conversation
             ticket = ticket_post.ticket
             Conversation.objects.filter(ticket=ticket).delete()
-            ticket.delete()
 
-            # Delete the TicketPost
+            # Delete files from storage
+            if ticket.uploaded_file_url:
+                default_storage.delete(ticket.uploaded_file_url)
+            if ticket.masked_file_url:
+                default_storage.delete(ticket.masked_file_url)
+            if ticket.uploaded_seat_image_url:
+                default_storage.delete(ticket.uploaded_seat_image_url)
+            if ticket.processed_seat_image_url:
+                default_storage.delete(ticket.processed_seat_image_url)
+
+            # Delete Ticket and TicketPost
+            ticket.delete()
             ticket_post.delete()
+
             return Response({"detail": "Ticket and TicketPost deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
         except Exception as e:
-            print(f"Error while deleting: {str(e)}")
-            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @swagger_auto_schema(
-    operation_id="티켓 양도글 수정",
-    operation_description="티켓 양도글을 수정합니다.",
-    request_body=TicketPostDetailRequestSerializer,
-    responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
-)
-    def put(self, request, ticket_post_id):
+        operation_id="티켓 양도글 수정",
+        operation_description="티켓 양도글을 수정합니다.",
+        request_body=TicketPostDetailRequestSerializer,
+        responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
+    )
+    def put(self, request, ticket_id):
         try:
-            # Fetch the TicketPost and associated Ticket
-            ticket_post = TicketPost.objects.get(ticket_id=ticket_post_id)
+            ticket_post = TicketPost.objects.get(ticket__id=ticket_id)
             ticket = ticket_post.ticket
         except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Authorization check
         if request.user != ticket_post.author:
-            return Response({"detail": "You are not authorized to edit this post."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "You are not authorized to edit this post."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        # Handle updates dynamically
+        # Update fields dynamically
         update_fields = [
             "title",
             "date",
@@ -237,30 +213,32 @@ class TicketPostDetailView(APIView):
         ]
         for field in update_fields:
             value = request.data.get(field)
-            if value is not None:  # Only update non-empty fields
+            if value is not None:
                 setattr(ticket, field, value)
 
-        # Handle file uploads
+        # Handle file uploads (save to storage and update URL fields)
         if uploaded_file := request.FILES.get("uploaded_file"):
-            ticket.uploaded_file = uploaded_file
+            reserv_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_file.name}", uploaded_file)
+            ticket.uploaded_file_url = default_storage.url(reserv_path)
+
         if uploaded_seat_image := request.FILES.get("uploaded_seat_image"):
-            ticket.uploaded_seat_image = uploaded_seat_image
+            seat_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_seat_image.name}", uploaded_seat_image)
+            ticket.uploaded_seat_image_url = default_storage.url(seat_path)
 
         try:
-            # Save the ticket and associated post
             ticket.save()
             ticket_post.save()
 
-            # Serialize updated data
             serializer = TicketPostSerializer(ticket_post, context={"request": request})
             response_data = serializer.data
-            response_data["masked_seat_image_url"] = serializer.data["ticket"]["uploaded_processed_seat_image_url"]
+            response_data["masked_seat_image_url"] = ticket.processed_seat_image_url
 
             return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
-            print(f"Error while updating: {str(e)}")
-            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return Response(
+                {"detail": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class TransferListView(APIView):
     @swagger_auto_schema(
