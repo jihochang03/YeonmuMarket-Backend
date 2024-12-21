@@ -324,7 +324,6 @@ pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     responses={200: '성공 시 예매 정보를 반환합니다.'}
 )
 
-
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
@@ -332,32 +331,34 @@ def process_image(request):
     permission_classes = [AllowAny]
     try:
         keyword = request.POST.get('keyword', '').strip()
+        logger.debug(f"Received keyword: {keyword}")
         if not keyword:
             return Response({"status": "error", "message": "Keyword is required."}, status=400)
 
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
+            logger.debug(f"Uploaded files: {request.FILES.keys()}")
             return Response({"status": "error", "message": "Both files are required."}, status=400)
 
-        # 파일 읽기
         reserv_image = request.FILES['reservImage']
         seat_image = request.FILES['seatImage']
 
-        # S3 업로드 경로
         reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
         reserv_file_url = default_storage.url(reserv_file_path)
+        logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
         seat_file_path = default_storage.save(f'uploads/{seat_image.name}', seat_image)
         seat_file_url = default_storage.url(seat_file_path)
+        logger.debug(f"Seat file path: {seat_file_path}, URL: {seat_file_url}")
 
-        # OCR 처리
         try:
             reserv_image.seek(0)
             image = Image.open(BytesIO(reserv_image.read()))
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
             extracted_text = ''.join(extracted_text.split())
+            logger.debug(f"Extracted text: {extracted_text}")
         except Exception as e:
+            logger.exception("OCR failed")
             return Response({"status": "error", "message": "OCR failed."}, status=500)
 
-        # 키워드에 따라 처리
         if keyword == '인터파크':
             response_data = process_interpark_data(extracted_text)
         elif keyword == '예스24':
@@ -367,13 +368,13 @@ def process_image(request):
         else:
             return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
-        # 파일 삭제
         default_storage.delete(reserv_file_path)
         default_storage.delete(seat_file_path)
+        logger.debug("Files deleted successfully")
 
         return Response(response_data, status=200)
     except Exception as e:
-        logger.exception("Unexpected error during image processing.")
+        logger.exception("Unexpected error during image processing")
         return Response({"status": "error", "message": str(e)}, status=500)
 
 
