@@ -13,25 +13,25 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def get_uploaded_masked_file_url(self, obj):
         request = self.context.get('request')
-        if request and obj.masked_file and hasattr(obj.masked_file, 'url'):
+        if request and obj.masked_file_url and hasattr(obj.masked_file, 'url'):
             return request.build_absolute_uri(obj.masked_file.url)
         return None
     
     def get_uploaded_file_url(self, obj):
         request = self.context.get('request')
-        if request and obj.uploaded_file and hasattr(obj.uploaded_file, 'url'):
+        if request and obj.uploaded_file_url and hasattr(obj.uploaded_file, 'url'):
             return request.build_absolute_uri(obj.uploaded_file.url)
         return None
 
     def get_uploaded_processed_seat_image_url(self, obj):
         request = self.context.get('request')
-        if request and obj.processed_seat_image and hasattr(obj.processed_seat_image, 'url'):
+        if request and obj.processed_seat_image_url and hasattr(obj.processed_seat_image, 'url'):
             return request.build_absolute_uri(obj.processed_seat_image.url)
         return None
     
     def get_uploaded_seat_image_url(self, obj):
         request = self.context.get('request')
-        if request and obj.uploaded_seat_image and hasattr(obj.uploaded_seat_image, 'url'):
+        if request and obj.uploaded_seat_image_url and hasattr(obj.uploaded_seat_image, 'url'):
             return request.build_absolute_uri(obj.uploaded_seat_image.url)
         return None
 
