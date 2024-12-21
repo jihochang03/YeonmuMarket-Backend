@@ -128,9 +128,9 @@ class TicketPostDetailView(APIView):
         operation_description="양도글 1개의 상세 정보를 조회합니다.",
         responses={200: TicketPostSerializer, 400: "Bad Request"},
     )
-    def get(self, request, ticket_id):
+    def get(self, request, ticket_post_id):
         try:
-            ticket_post = TicketPost.objects.get(ticket__id=ticket_id)
+            ticket_post = TicketPost.objects.get(ticket__id=ticket_post_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -143,9 +143,9 @@ class TicketPostDetailView(APIView):
         request_body=None,
         responses={204: "No Content", 404: "Not Found", 400: "Bad Request"},
     )
-    def delete(self, request, ticket_id):
+    def delete(self, request, ticket_post_id):
         try:
-            ticket_post = TicketPost.objects.get(ticket__id=ticket_id)
+            ticket_post = TicketPost.objects.get(ticket__id=ticket_post_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -187,9 +187,9 @@ class TicketPostDetailView(APIView):
         request_body=TicketPostDetailRequestSerializer,
         responses={200: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
     )
-    def put(self, request, ticket_id):
+    def put(self, request, ticket_post_id):
         try:
-            ticket_post = TicketPost.objects.get(ticket__id=ticket_id)
+            ticket_post = TicketPost.objects.get(ticket__id=ticket_post_id)
             ticket = ticket_post.ticket
         except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
