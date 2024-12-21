@@ -38,6 +38,7 @@ import logging
 import pytesseract
 from datetime import datetime
 import uuid
+import base64
 import hashlib
 from unidecode import unidecode
 
@@ -746,60 +747,36 @@ def extract_line_after_at_yes24(text):
 
     return extracted_text
 
-TWITTER_AUTH_URL = "https://twitter.com/i/oauth2/authorize"
-TWITTER_TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
+
+
+
+
 TWITTER_API_URL = "https://api.twitter.com/2/tweets"
 
-CLIENT_ID = getattr(settings, "TWITTER_CLIENT_ID", None)
-CLIENT_SECRET = getattr(settings, "TWITTER_CLIENT_SECRET", None)
-REDIRECT_URI = "https://yourdomain.com/callback"  # Replace with your actual callback URL
-SCOPES = "tweet.write offline.access"
+BEARER_TOKEN = os.getenv("BEARER_TOKEN")
 
-@api_view(["GET"])
-def get_twitter_auth_url(request):
-    """
-    Generate the Twitter authorization URL for user login.
-    """
-    params = {
-        "response_type": "code",
-        "client_id": CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
-        "scope": SCOPES,
-        "state": "random_state_string",  # Add CSRF protection
-        "code_challenge": "your_code_challenge",  # PKCE Code Challenge
-        "code_challenge_method": "plain",  # Use plain for simplicity
-    }
-    auth_url = f"{TWITTER_AUTH_URL}?{requests.compat.urlencode(params)}"
-    return JsonResponse({"auth_url": auth_url})
-
-
-@api_view(["POST"])
 def post_tweet(request):
     """
-    Post a tweet using OAuth 2.0 User Context.
+    Post a tweet using App-Only Authentication
     """
-    access_token = request.session.get("twitter_access_token")  # Store the token after login
     tweet_content = request.data.get("tweetContent")
-
-    if not access_token:
-        return JsonResponse({"message": "User is not authenticated."}, status=401)
-
     if not tweet_content:
         return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
 
     headers = {
-        "Authorization": f"Bearer {access_token}",
+        "Authorization": f"Bearer {BEARER_TOKEN}",
         "Content-Type": "application/json",
     }
     payload = {"text": tweet_content}
 
     try:
         response = requests.post(TWITTER_API_URL, json=payload, headers=headers)
-        if response.status_code not in [200, 201]:
+        if response.status_code in [200, 201]:
+            return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
+        else:
             return JsonResponse(
                 {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
                 status=response.status_code,
             )
-        return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
     except requests.RequestException as e:
         return JsonResponse({"message": "Twitter API 요청 중 오류가 발생했습니다.", "error": str(e)}, status=500)
