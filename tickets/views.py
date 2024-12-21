@@ -760,7 +760,7 @@ def post_tweet(request):
 
     # Twitter API v2 URL and Bearer Token
     url = "https://api.twitter.com/2/tweets"
-    bearer_token =os.getenv("TWITTER_BEARER_TOKEN")  # Ensure Bearer Token is set
+    bearer_token =os.getenv("BEARER_TOKEN")  # Ensure Bearer Token is set
 
     if not bearer_token:
         print("ERROR: Bearer token is not set in the settings.")
