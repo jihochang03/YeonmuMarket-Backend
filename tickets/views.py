@@ -41,6 +41,7 @@ import uuid
 import base64
 import hashlib
 from unidecode import unidecode
+from requests_oauthlib import OAuth1
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
@@ -748,53 +749,40 @@ def extract_line_after_at_yes24(text):
     return extracted_text
 
 TWITTER_TOKEN_URL = "https://api.twitter.com/oauth2/token"
-CLIENT_ID = os.getenv("TWITTER_CLIENT_ID")
-CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET")
 
 
-def generate_bearer_token():
-    key_secret = f"{CLIENT_ID}:{CLIENT_SECRET}".encode("ascii")
-    b64_encoded_key_secret = base64.b64encode(key_secret).decode("ascii")
+# Twitter API Credentials
+CONSUMER_KEY = "your_consumer_key"  # Consumer Key
+CONSUMER_SECRET = "your_consumer_secret"  # Consumer Secret
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+ACCESS_TOKEN_SECRET =  os.getenv("ACCESS_TOKEN_SECRET")
 
-    headers = {
-        "Authorization": f"Basic {b64_encoded_key_secret}",
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    }
-    payload = {"grant_type": "client_credentials"}
+TWITTER_API_URL = "https://api.twitter.com/1.1/statuses/update.json"
 
-    response = requests.post(TWITTER_TOKEN_URL, headers=headers, data=payload)
-    if response.status_code == 200:
-        return response.json()["access_token"]
-    else:
-        raise Exception("Failed to fetch Bearer Token")
-
-TWITTER_API_URL = "https://api.twitter.com/2/tweets"
-
-BEARER_TOKEN =os.getenv("BEARER_TOKEN")
-
-@api_view(["POST"])
 def post_tweet(request):
     """
-    Post a tweet using App-Only Authentication
+    Post a tweet using OAuth 1.0a Authentication
     """
     tweet_content = request.data.get("tweetContent")
     if not tweet_content:
         return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
 
-    headers = {
-        "Authorization": f"Bearer {BEARER_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    payload = {"text": tweet_content}
+    # OAuth1 인증 객체 생성
+    auth = OAuth1(
+        CONSUMER_KEY,
+        CONSUMER_SECRET,
+        ACCESS_TOKEN,
+        ACCESS_TOKEN_SECRET
+    )
 
-    try:
-        response = requests.post(TWITTER_API_URL, json=payload, headers=headers)
-        if response.status_code in [200, 201]:
-            return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
-        else:
-            return JsonResponse(
-                {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
-                status=response.status_code,
-            )
-    except requests.RequestException as e:
-        return JsonResponse({"message": "Twitter API 요청 중 오류가 발생했습니다.", "error": str(e)}, status=500)
+    # Twitter API 요청
+    payload = {"status": tweet_content}
+    response = requests.post(TWITTER_API_URL, data=payload, auth=auth)
+
+    if response.status_code in [200, 201]:
+        return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
+    else:
+        return JsonResponse(
+            {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
+            status=response.status_code,
+        )
