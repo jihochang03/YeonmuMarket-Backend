@@ -13,6 +13,7 @@ from user.request_serializers import SignInRequestSerializer
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
+from io import BytesIO
 from PIL import Image
 from django.conf import settings
 import pytesseract
@@ -350,32 +351,52 @@ def process_image(request):
         logger.debug(f"Seat file path: {seat_file_path}, URL: {seat_file_url}")
 
         try:
-            reserv_image.seek(0)
+            reserv_image.seek(0)  # Ensure file pointer is at the beginning
+            logger.debug("Starting OCR processing for reservImage")
+
             image = Image.open(BytesIO(reserv_image.read()))
+            logger.debug("Image loaded successfully for OCR")
+
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+            logger.debug(f"Raw extracted text: {extracted_text}")
+
             extracted_text = ''.join(extracted_text.split())
-            logger.debug(f"Extracted text: {extracted_text}")
+            logger.debug(f"Processed extracted text: {extracted_text}")
         except Exception as e:
-            logger.exception("OCR failed")
+            logger.exception("OCR processing failed")
             return Response({"status": "error", "message": "OCR failed."}, status=500)
 
-        if keyword == '인터파크':
-            response_data = process_interpark_data(extracted_text)
-        elif keyword == '예스24':
-            response_data = process_yes24_data(extracted_text)
-        elif keyword == '티켓링크':
-            response_data = process_link_data(extracted_text)
-        else:
-            return Response({"status": "error", "message": "Invalid keyword."}, status=400)
+        # Step 5: Keyword-specific processing
+        try:
+            if keyword == '인터파크':
+                response_data = process_interpark_data(extracted_text)
+            elif keyword == '예스24':
+                response_data = process_yes24_data(extracted_text)
+            elif keyword == '티켓링크':
+                response_data = process_link_data(extracted_text)
+            else:
+                logger.error(f"Invalid keyword provided: {keyword}")
+                return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
-        default_storage.delete(reserv_file_path)
-        default_storage.delete(seat_file_path)
-        logger.debug("Files deleted successfully")
+            logger.debug(f"Processed data for keyword {keyword}: {response_data}")
+        except Exception as e:
+            logger.exception("Keyword processing failed")
+            return Response({"status": "error", "message": f"Keyword processing failed: {str(e)}"}, status=500)
 
+        # Step 6: Cleanup files
+        try:
+            default_storage.delete(reserv_file_path)
+            default_storage.delete(seat_file_path)
+            logger.debug("Uploaded files deleted successfully from S3")
+        except Exception as e:
+            logger.exception("File deletion failed")
+            return Response({"status": "error", "message": "Failed to delete files from storage."}, status=500)
+
+        # Step 7: Return response
         return Response(response_data, status=200)
     except Exception as e:
         logger.exception("Unexpected error during image processing")
-        return Response({"status": "error", "message": str(e)}, status=500)
+        return Response({"status": "error", "message": f"Unexpected error: {str(e)}"}, status=500)
 
 
 def process_link_data(extracted_text):
