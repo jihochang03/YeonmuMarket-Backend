@@ -7,8 +7,11 @@ from rest_framework.permissions import AllowAny
 from django.conf.urls.static import static
 from django.conf import settings
 import os
+from pathlib import Path
 import environ
 from user.views import KakaoLoginView, KakaoSignInCallbackView
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 환경 변수 로드
 env = environ.Env(

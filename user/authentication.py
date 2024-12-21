@@ -14,6 +14,7 @@ class CookieJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
         logger.debug(f"Request Cookies: {request.COOKIES}")
         token = request.COOKIES.get("access_token")
+        payload = None  # payload 초기화
 
         if not token:
             logger.warning("Access token not found")
@@ -42,11 +43,10 @@ class CookieJWTAuthentication(BaseAuthentication):
                     "exp": datetime.utcnow() + timedelta(minutes=15),
                     "iat": datetime.utcnow()
                 }, settings.SECRET_KEY, algorithm="HS256")
-
                 logger.info("New access token generated")
-
-                # 쿠키에 새 Access Token 설정
                 request.META['new_access_token'] = new_access_token
+
+                payload = refresh_payload  # Refresh Payload로 대체
             except jwt.ExpiredSignatureError:
                 raise AuthenticationFailed("Refresh token has expired")
             except jwt.InvalidTokenError:
@@ -55,6 +55,10 @@ class CookieJWTAuthentication(BaseAuthentication):
         except jwt.InvalidTokenError:
             logger.warning("Invalid access token")
             raise AuthenticationFailed("Invalid token")
+
+        # payload가 None인 경우 확인
+        if not payload:
+            raise AuthenticationFailed("Authentication failed: No valid payload")
 
         try:
             user = User.objects.get(id=payload["user_id"])
