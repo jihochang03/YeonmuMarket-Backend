@@ -43,6 +43,8 @@ import base64
 import hashlib
 from unidecode import unidecode
 from requests_oauthlib import OAuth1
+import cv2
+import numpy as np
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
@@ -298,6 +300,34 @@ pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     responses={200: '성공 시 예매 정보를 반환합니다.'}
 )
 
+def process_image_for_ocr(image_data):
+    """
+    Process the image to improve OCR accuracy.
+    """
+    # 1. 이미지를 Pillow로 로드
+    image = Image.open(BytesIO(image_data))
+
+    # 2. 해상도 조정 (2배 확대)
+    base_width = 2000
+    w_percent = base_width / float(image.size[0])
+    h_size = int((float(image.size[1]) * float(w_percent)))
+    image = image.resize((base_width, h_size), Image.ANTIALIAS)
+
+    # 3. 흑백 변환 (이진화)
+    image = image.convert("L")
+    image = image.point(lambda x: 0 if x < 140 else 255)
+
+    # 4. 대비 조정
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2.0)
+
+    # 5. 노이즈 제거 (OpenCV)
+    img_array = np.array(image)
+    denoised = cv2.fastNlMeansDenoising(img_array, None, h=30, templateWindowSize=7, searchWindowSize=21)
+    image = Image.fromarray(denoised)
+
+    return image
+
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
@@ -345,7 +375,7 @@ def process_image(request):
             reserv_image.seek(0)  # Ensure file pointer is at the beginning
             logger.debug("Starting OCR processing for reservImage")
 
-            image = Image.open(BytesIO(reserv_image.read()))
+            image = process_image_for_ocr(reserv_image.read())
             logger.debug("Image loaded successfully for OCR")
 
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
@@ -787,6 +817,10 @@ def post_tweet(request):
     # Twitter API 요청
     payload = {"status": tweet_content}
     response = requests.post(TWITTER_API_URL, data=payload, auth=auth)
+    
+    print("Twitter API Response Status:", response.status_code)
+    print("Twitter API Response Content:", response.json())
+
 
     if response.status_code in [200, 201]:
         return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
