@@ -61,21 +61,28 @@ class TicketView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class TicketPostListView(APIView):
-    @swagger_auto_schema(
-        operation_id="티켓 양도글 생성",
-        operation_description="티켓 양도글을 생성합니다.",
-        request_body=TicketPostListRequestSerializer,
-        responses={201: TicketPostSerializer, 404: "Not Found", 400: "Bad Request"},
-    )
+    @staticmethod
+    def generate_unique_filename(ticket_id, original_name, suffix=""):
+        """Generates a unique filename using the ticket ID and original file name."""
+        file_extension = original_name.split('.')[-1]
+        base_name = original_name[:-(len(file_extension) + 1)]
+        hashed_name = hashlib.md5(base_name.encode()).hexdigest()[:8]
+        unique_name = f"ticket_{ticket_id}_{suffix}_{hashed_name}.{file_extension}"
+        return unique_name
+
     def post(self, request):
         user = request.user
-        print(f"-------- User: {user}")  # 유저 정보 출력
         if user.is_anonymous:
-            return Response({"detail": "인증되지 않은 사용자입니다. 로그인 후 시도해주세요."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "인증되지 않은 사용자입니다. 로그인 후 시도해주세요."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-        print("Received data:", request.data)  # 요청 데이터 출력
-        if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
-            return Response({"status": "error", "message": "Both reservImage and seatImage files are required."}, status=400)
+        if "reservImage" not in request.FILES or "seatImage" not in request.FILES:
+            return Response(
+                {"status": "error", "message": "Both reservImage and seatImage files are required."},
+                status=400,
+            )
 
         # 요청 데이터 추출
         title = request.data.get("title")
@@ -83,43 +90,33 @@ class TicketPostListView(APIView):
         seat = request.data.get("seat")
         booking_details = request.data.get("booking_details")
         price = request.data.get("price")
-        booking_page=request.data.get("booking_page")
+        booking_page = request.data.get("booking_page")
         casting = request.data.get("casting")
-        uploaded_file = request.FILES['reservImage']
-        uploaded_seat_image = request.FILES['seatImage']
-        keyword = request.data.get("keyword")
         phone_last_digits = request.data.get("phone_last_digits")
-
-        # 오류 메시지를 담을 리스트
-        errors = {}
+        uploaded_file = request.FILES["reservImage"]
+        uploaded_seat_image = request.FILES["seatImage"]
 
         # 필수 필드 검증
+        errors = {}
         if not title:
             errors["title"] = "제목은 필수 입력 사항입니다."
         if not date:
             errors["date"] = "날짜는 필수 입력 사항입니다."
         if not seat:
             errors["seat"] = "좌석 정보는 필수 입력 사항입니다."
-        if not price:
-            errors["price"] = "가격은 필수 입력 사항입니다."
-        elif not price.isdigit() or int(price) <= 0:
-            errors["price"] = "유효한 가격을 입력해야 합니다. 가격은 숫자여야 하며 0보다 커야 합니다. '원' 단위는 붙이지 마세요 ex) 172000 "
+        if not price or not price.isdigit() or int(price) <= 0:
+            errors["price"] = "유효한 가격을 입력해야 합니다. 숫자여야 하며 0보다 커야 합니다."
         if not casting:
             errors["casting"] = "캐스팅 정보는 필수 입력 사항입니다."
 
-        # 검증 실패 시 오류 반환
         if errors:
-            print("Validation errors:", errors)  # 디버깅: 검증 오류 출력
             return Response(
-                {
-                    "detail": "입력값 검증 실패",  # 전체 오류 요약 메시지
-                    "errors": errors  # 필드별 오류 상세 메시지
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": "입력값 검증 실패", "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            # Ticket 객체 생성
+            # **1. Ticket 객체 생성**
             ticket = Ticket.objects.create(
                 title=title,
                 date=date,
@@ -128,47 +125,38 @@ class TicketPostListView(APIView):
                 price=price,
                 booking_page=booking_page,
                 casting=casting,
-                uploaded_file=uploaded_file,
-                uploaded_seat_image=uploaded_seat_image,
                 phone_last_digits=phone_last_digits,
-                owner=user,  # 현재 로그인된 사용자
-            )
-            print("Ticket created:", ticket)
-            ticket.save()
-            
-
-            # 관련 대화 생성
-            conversation = Conversation.objects.create(
-                ticket=ticket,
                 owner=user,
-                transferee=None  # 양도자가 아직 없음
             )
-            print("Conversation created:", conversation)
 
-            # TicketPost 객체 생성
-            ticket_post = TicketPost.objects.create(
-                ticket=ticket,
-                author=user
+            # **2. 파일 저장**
+            reserv_file_name = self.generate_unique_filename(ticket.id, uploaded_file.name, "reserv")
+            reserv_file_path = default_storage.save(f"tickets/{reserv_file_name}", uploaded_file)
+
+            seat_file_name = self.generate_unique_filename(ticket.id, uploaded_seat_image.name, "seat")
+            seat_file_path = default_storage.save(f"tickets/{seat_file_name}", uploaded_seat_image)
+
+            # **3. Ticket 객체 업데이트**
+            ticket.uploaded_file = reserv_file_path
+            ticket.uploaded_seat_image = seat_file_path
+            ticket.save()
+
+            # **4. Conversation 생성**
+            conversation = Conversation.objects.create(
+                ticket=ticket, owner=user, transferee=None
             )
-            ticket_post.save()
-            print("TicketPost created:", ticket_post)
+
+            # **5. TicketPost 생성**
+            ticket_post = TicketPost.objects.create(ticket=ticket, author=user)
 
         except Exception as e:
-            print(f"오류 발생: {str(e)}")  # 디버깅: 발생한 오류 출력
             return Response({"detail": f"오류 발생: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 성공적으로 생성된 경우의 응답
-        serializer = TicketPostSerializer(ticket_post, context={'request': request})
-        print("Serialized data:", serializer.data)  # 디버깅: 응답으로 보낼 데이터 출력
-
-        # 응답 데이터에 ticket_id 추가
+        # **6. 응답 데이터 생성**
+        serializer = TicketPostSerializer(ticket_post, context={"request": request})
         response_data = serializer.data
         response_data["ticket_id"] = ticket.id
-
-        response_data["masked_seat_image_url"] = serializer.data['ticket']['uploaded_processed_seat_image_url']
-
-        # Debugging: Log the full response data
-        print(f"Response Data: {response_data}")
+        response_data["masked_seat_image_url"] = ticket.processed_seat_image.url if ticket.processed_seat_image else None
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -179,9 +167,9 @@ class TicketPostDetailView(APIView):
         operation_description="양도글 1개의 상세 정보를 조회합니다.",
         responses={200: TicketPostSerializer, 400: "Bad Request"},
     )
-    def get(self, request, ticket_post_id):
+    def get(self, request, ticket_id):
         try:
-            ticket_post = TicketPost.objects.get(ticket_id=ticket_post_id)
+            ticket_post = TicketPost.objects.get(ticket_id=ticket_id)
         except TicketPost.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -382,8 +370,6 @@ def process_image(request):
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
             logger.debug(f"Raw extracted text: {extracted_text}")
 
-            extracted_text = ''.join(extracted_text.split())
-            logger.debug(f"Processed extracted text: {extracted_text}")
         except Exception as e:
             logger.exception("OCR processing failed")
             return Response({"status": "error", "message": "OCR failed."}, status=500)
