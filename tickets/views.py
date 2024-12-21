@@ -760,7 +760,7 @@ def post_tweet(request):
 
     # Twitter API v2 URL and Bearer Token
     url = "https://api.twitter.com/2/tweets"
-    bearer_token = getattr(settings, "BEARER_TOKEN", None)  # Ensure Bearer Token is set
+    bearer_token =os.getenv("TWITTER_BEARER_TOKEN")  # Ensure Bearer Token is set
 
     if not bearer_token:
         print("ERROR: Bearer token is not set in the settings.")
@@ -787,7 +787,7 @@ def post_tweet(request):
         print(f"DEBUG: Response content: {response.text}")
 
         # Check for errors in the response
-        if response.status_code != 201:
+        if response.status_code not in [200, 201]:
             print("ERROR: Failed to post tweet.")
             print(f"ERROR DETAILS: {response.json()}")
             return JsonResponse({
