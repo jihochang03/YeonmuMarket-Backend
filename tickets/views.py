@@ -36,6 +36,10 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 import logging
 import pytesseract
+from datetime import datetime
+import uuid
+import hashlib
+from unidecode import unidecode
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
@@ -331,11 +335,13 @@ pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 def process_image(request):
     permission_classes = [AllowAny]
     try:
+        # Step 1: Get and validate the keyword
         keyword = request.POST.get('keyword', '').strip()
         logger.debug(f"Received keyword: {keyword}")
         if not keyword:
             return Response({"status": "error", "message": "Keyword is required."}, status=400)
 
+        # Step 2: Validate uploaded files
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
             logger.debug(f"Uploaded files: {request.FILES.keys()}")
             return Response({"status": "error", "message": "Both files are required."}, status=400)
@@ -343,13 +349,29 @@ def process_image(request):
         reserv_image = request.FILES['reservImage']
         seat_image = request.FILES['seatImage']
 
-        reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
-        reserv_file_url = default_storage.url(reserv_file_path)
+        # Step 3: Handle unique file names and folder structure
+        def sanitize_file_name(file_name):
+            ext = file_name.split('.')[-1]
+            base_name = file_name[:-(len(ext) + 1)]
+            sanitized_name = unidecode(base_name).replace(" ", "_")
+            return f"{sanitized_name}.{ext}"
+
+        def get_unique_file_path(file, prefix="uploads"):
+            sanitized_name = sanitize_file_name(file.name)
+            unique_name = f"{uuid.uuid4().hex}_{hashlib.md5(sanitized_name.encode()).hexdigest()[:8]}.{sanitized_name.split('.')[-1]}"
+            today = datetime.now().strftime("%Y/%m/%d")
+            return f"{prefix}/{today}/{unique_name}"
+
+        reserv_file_path = get_unique_file_path(reserv_image)
+        reserv_file_url = default_storage.save(reserv_file_path, reserv_image)
+
+        seat_file_path = get_unique_file_path(seat_image)
+        seat_file_url = default_storage.save(seat_file_path, seat_image)
+
         logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
-        seat_file_path = default_storage.save(f'uploads/{seat_image.name}', seat_image)
-        seat_file_url = default_storage.url(seat_file_path)
         logger.debug(f"Seat file path: {seat_file_path}, URL: {seat_file_url}")
 
+        # Step 4: OCR processing for reservation image
         try:
             reserv_image.seek(0)  # Ensure file pointer is at the beginning
             logger.debug("Starting OCR processing for reservImage")
@@ -383,20 +405,22 @@ def process_image(request):
             logger.exception("Keyword processing failed")
             return Response({"status": "error", "message": f"Keyword processing failed: {str(e)}"}, status=500)
 
-        # Step 6: Cleanup files
-        try:
-            default_storage.delete(reserv_file_path)
-            default_storage.delete(seat_file_path)
-            logger.debug("Uploaded files deleted successfully from S3")
-        except Exception as e:
-            logger.exception("File deletion failed")
-            return Response({"status": "error", "message": "Failed to delete files from storage."}, status=500)
-
-        # Step 7: Return response
+        # Step 6: Return response
         return Response(response_data, status=200)
+
     except Exception as e:
         logger.exception("Unexpected error during image processing")
         return Response({"status": "error", "message": f"Unexpected error: {str(e)}"}, status=500)
+
+    finally:
+        # Step 7: Cleanup files only on failure
+        if not request.successful_authenticator:  # Or condition based on your logic
+            try:
+                default_storage.delete(reserv_file_path)
+                default_storage.delete(seat_file_path)
+                logger.debug("Uploaded files deleted successfully from S3")
+            except Exception as e:
+                logger.exception("File deletion failed")
 
 
 def process_link_data(extracted_text):
