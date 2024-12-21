@@ -6,6 +6,7 @@ from drf_yasg import openapi
 from rest_framework.permissions import AllowAny
 from django.conf.urls.static import static
 from django.conf import settings
+import os
 import environ
 from user.views import KakaoLoginView, KakaoSignInCallbackView
 
@@ -42,7 +43,7 @@ urlpatterns = [
 
 # AWS S3 미디어 파일 설정
 AWS_REGION = 'ap-northeast-2'  # S3 버킷의 리전 (서울)
-AWS_STORAGE_BUCKET_NAME = 'your-s3-bucket-name'  # S3 버킷 이름
+AWS_STORAGE_BUCKET_NAME = 'yeonmubucket'  # S3 버킷 이름
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')  # 환경 변수에서 가져오기
 AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')  # 환경 변수에서 가져오기
 
