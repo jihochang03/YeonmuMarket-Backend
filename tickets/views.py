@@ -45,6 +45,7 @@ from unidecode import unidecode
 from requests_oauthlib import OAuth1
 import cv2
 import numpy as np
+from TwitterAPI import TwitterAPI
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
@@ -783,8 +784,8 @@ TWITTER_TOKEN_URL = "https://api.twitter.com/oauth2/token"
 
 
 # Twitter API Credentials
-CONSUMER_KEY = "your_consumer_key"  # Consumer Key
-CONSUMER_SECRET = "your_consumer_secret"  # Consumer Secret
+CONSUMER_KEY = os.getenv("CONSUMER_KEY")  # Consumer Key
+CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")  # Consumer Secret
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET =  os.getenv("ACCESS_TOKEN_SECRET")
 
