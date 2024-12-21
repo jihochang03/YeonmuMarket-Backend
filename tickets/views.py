@@ -414,7 +414,7 @@ def process_image(request):
 
     finally:
         # Step 7: Cleanup files only on failure
-        if not request.successful_authenticator:  # Or condition based on your logic
+        if request.successful_authenticator:  # Or condition based on your logic
             try:
                 default_storage.delete(reserv_file_path)
                 default_storage.delete(seat_file_path)
