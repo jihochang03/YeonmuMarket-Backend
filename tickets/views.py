@@ -789,7 +789,9 @@ CONSUMER_SECRET = os.getenv("TWITTER_CONSUMER_SECRET")
 ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
+@csrf_exempt
 def post_tweet(request):
+    permission_classes = [AllowAny]
     """
     Post a tweet with an optional image using TwitterAPI.
     """
