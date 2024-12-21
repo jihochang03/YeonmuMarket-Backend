@@ -770,7 +770,7 @@ def generate_bearer_token():
 
 TWITTER_API_URL = "https://api.twitter.com/2/tweets"
 
-BEARER_TOKEN =generate_bearer_token()
+BEARER_TOKEN =os.getenv("BEARER_TOKEN")
 
 @api_view(["POST"])
 def post_tweet(request):
