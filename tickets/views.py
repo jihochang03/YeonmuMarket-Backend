@@ -763,7 +763,7 @@ def post_tweet(request):
     """
     Post a tweet using OAuth 1.0a Authentication
     """
-    tweet_content = request.data.get("tweetContent")
+    tweet_content = request.POST.get("tweetContent")
     if not tweet_content:
         return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
 
