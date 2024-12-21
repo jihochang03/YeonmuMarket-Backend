@@ -45,7 +45,7 @@ from unidecode import unidecode
 from requests_oauthlib import OAuth1
 import cv2
 import numpy as np
-from TwitterAPI import TwitterAPI
+
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
