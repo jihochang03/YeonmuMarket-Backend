@@ -325,75 +325,57 @@ pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 )
 
 
-
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 def process_image(request):
     permission_classes = [AllowAny]
     try:
-        # keyword 로깅
         keyword = request.POST.get('keyword', '').strip()
-        logger.debug("Received keyword: %s", keyword)
+        if not keyword:
+            return Response({"status": "error", "message": "Keyword is required."}, status=400)
 
-        # 파일 유무 확인
         if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
-            logger.warning("Missing files: reservImage or seatImage not provided.")
             return Response({"status": "error", "message": "Both files are required."}, status=400)
 
-        # 예약 이미지 처리
+        # 파일 읽기
         reserv_image = request.FILES['reservImage']
-        logger.debug("Reservation image file received: %s", reserv_image.name)
-        reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
-        reserv_file_full_path = os.path.join(default_storage.location, reserv_file_path)
-        logger.debug("Reservation image saved at: %s", reserv_file_full_path)
-
-        # 좌석 이미지 처리
         seat_image = request.FILES['seatImage']
-        logger.debug("Seat image file received: %s", seat_image.name)
+
+        # S3 업로드 경로
+        reserv_file_path = default_storage.save(f'uploads/{reserv_image.name}', reserv_image)
+        reserv_file_url = default_storage.url(reserv_file_path)
         seat_file_path = default_storage.save(f'uploads/{seat_image.name}', seat_image)
-        seat_file_full_path = os.path.join(default_storage.location, seat_file_path)
-        logger.debug("Seat image saved at: %s", seat_file_full_path)
+        seat_file_url = default_storage.url(seat_file_path)
 
+        # OCR 처리
         try:
-            image = Image.open(reserv_file_full_path)
+            reserv_image.seek(0)
+            image = Image.open(BytesIO(reserv_image.read()))
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-            logger.debug("Original Extracted text: %s", extracted_text)
-
-            # 줄바꿈과 모든 공백 제거
             extracted_text = ''.join(extracted_text.split())
-            logger.debug("Processed text (no spaces or newlines): %s", extracted_text)
-        except pytesseract.TesseractError as e:
-            logger.error("Tesseract OCR error: %s", str(e))
-            extracted_text = None  # 기본값 설정
         except Exception as e:
-            logger.error("Unexpected error during OCR: %s", str(e))
-            extracted_text = None  # 기본값 설정
+            return Response({"status": "error", "message": "OCR failed."}, status=500)
 
-        if extracted_text is None:
-            return Response({"status": "error", "message": "OCR failed. Please check your image or Tesseract configuration."}, status=500)
-
-        # keyword 별 처리
+        # 키워드에 따라 처리
         if keyword == '인터파크':
             response_data = process_interpark_data(extracted_text)
-            logger.debug("Interpark processed data: %s", response_data)
-            return Response(response_data, status=200)
         elif keyword == '예스24':
             response_data = process_yes24_data(extracted_text)
-            logger.debug("Yes24 processed data: %s", response_data)
-            return Response(response_data, status=200)
         elif keyword == '티켓링크':
             response_data = process_link_data(extracted_text)
-            logger.debug("Ticketlink processed data: %s", response_data)
-            return Response(response_data, status=200)
         else:
-            logger.warning("Invalid keyword provided: %s", keyword)
             return Response({"status": "error", "message": "Invalid keyword."}, status=400)
 
+        # 파일 삭제
+        default_storage.delete(reserv_file_path)
+        default_storage.delete(seat_file_path)
+
+        return Response(response_data, status=200)
     except Exception as e:
-        # 예외 발생 시 전체 스택 트레이스 로그 기록
-        logger.exception("Exception occurred while processing images")
+        logger.exception("Unexpected error during image processing.")
         return Response({"status": "error", "message": str(e)}, status=500)
+
 
 def process_link_data(extracted_text):
     try:

@@ -119,8 +119,8 @@ AWS_REGION = 'ap-northeast-2'  # S3 버킷의 리전 (서울)
 AWS_STORAGE_BUCKET_NAME = 'yeonmubucket'
 
 
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')  # 환경 변수에서 가져오기
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')  # 환경 변수에서 가져오기
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
 # S3에서 미디어 파일에 접근할 도메인 설정
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com'
