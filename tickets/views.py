@@ -747,9 +747,30 @@ def extract_line_after_at_yes24(text):
 
     return extracted_text
 
+TWITTER_TOKEN_URL = "https://api.twitter.com/oauth2/token"
+CLIENT_ID = os.getenv("TWITTER_CLIENT_ID")
+CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET")
+
+
+def generate_bearer_token():
+    key_secret = f"{CLIENT_ID}:{CLIENT_SECRET}".encode("ascii")
+    b64_encoded_key_secret = base64.b64encode(key_secret).decode("ascii")
+
+    headers = {
+        "Authorization": f"Basic {b64_encoded_key_secret}",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    }
+    payload = {"grant_type": "client_credentials"}
+
+    response = requests.post(TWITTER_TOKEN_URL, headers=headers, data=payload)
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    else:
+        raise Exception("Failed to fetch Bearer Token")
+
 TWITTER_API_URL = "https://api.twitter.com/2/tweets"
 
-BEARER_TOKEN = os.getenv("BEARER_TOKEN")
+BEARER_TOKEN =generate_bearer_token()
 
 @api_view(["POST"])
 def post_tweet(request):
