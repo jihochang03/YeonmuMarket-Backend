@@ -11,6 +11,7 @@ from io import BytesIO
 import numpy as np
 import unicodedata
 import re
+import uuid
 
 # Tesseract configuration
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
@@ -50,7 +51,7 @@ class Ticket(models.Model):
         if self.uploaded_file and not self.masked_file:
             self.process_and_save_masked_image()
         if self.uploaded_seat_image and not self.processed_seat_image:
-            self.process_and_save_seat_image(self.keyword)
+            self.process_and_save_seat_image(self.booking_page)
         super().save(update_fields=["masked_file", "processed_seat_image"])
 
     @staticmethod
@@ -100,7 +101,7 @@ class Ticket(models.Model):
             except Exception as e:
                 print(f"Error in masking process: {str(e)}")
 
-    def process_and_save_seat_image(self, keyword):
+    def process_and_save_seat_image(self, booking_page):
         if self.uploaded_seat_image:
             try:
                 self.uploaded_seat_image.open()
@@ -110,7 +111,7 @@ class Ticket(models.Model):
                 nparr = np.frombuffer(image_data, np.uint8)
                 cv_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-                if keyword == "티켓링크":
+                if booking_page == "티켓링크":
                     pil_image = draw_bounding_box_no_color_cv(cv_image)
                 else:
                     pil_image = draw_bounding_box_purple_cv(cv_image)
