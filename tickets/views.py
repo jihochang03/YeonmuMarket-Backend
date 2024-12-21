@@ -780,53 +780,105 @@ def extract_line_after_at_yes24(text):
 
     return extracted_text
 
-TWITTER_TOKEN_URL = "https://api.twitter.com/oauth2/token"
 
+from TwitterAPI import TwitterAPI
 
 # Twitter API Credentials
-CONSUMER_KEY = os.getenv("CONSUMER_KEY")  # Consumer Key
-CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")  # Consumer Secret
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-ACCESS_TOKEN_SECRET =  os.getenv("ACCESS_TOKEN_SECRET")
-
-TWITTER_API_URL = "https://api.twitter.com/1.1/statuses/update.json"
+CONSUMER_KEY = os.getenv("TWITTER_CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("TWITTER_CONSUMER_SECRET")
+ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 def post_tweet(request):
-    # 로깅
-    logger.debug(f"Request content-type: {request.content_type}")
-    logger.debug(f"Request body: {request.body}")
     """
-    Post a tweet using OAuth 1.0a Authentication
+    Post a tweet with an optional image using TwitterAPI.
     """
-    if request.content_type == "application/json":
-        body = json.loads(request.body)
-        tweet_content = body.get("tweetContent")
-    else:
-        # application/x-www-form-urlencoded
-        tweet_content = request.POST.get("tweetContent")
-        
-    logger.debug(f"Extracted tweet_content: {tweet_content}")
+    import json
+    from io import BytesIO
 
-    # OAuth1 인증 객체 생성
-    auth = OAuth1(
+    # 요청 데이터 읽기
+    body = json.loads(request.body)
+    tweet_content = body.get("tweetContent")  # 트윗 내용
+    #image_path = body.get("imagePath")  # 이미지 경로 (Optional)
+
+    if not tweet_content:
+        return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
+
+    # TwitterAPI 초기화
+    api = TwitterAPI(
         CONSUMER_KEY,
         CONSUMER_SECRET,
         ACCESS_TOKEN,
         ACCESS_TOKEN_SECRET
     )
 
-    # Twitter API 요청
-    payload = {"status": tweet_content}
-    response = requests.post(TWITTER_API_URL, data=payload, auth=auth)
-    
-    print("Twitter API Response Status:", response.status_code)
-    print("Twitter API Response Content:", response.json())
+    try:
+        # media_id = None
+        # if image_path:  # 이미지가 제공된 경우
+        #     with open(image_path, "rb") as f:
+        #         data = f.read()
+        #         response = api.request("media/upload", {"media_type": "image/jpeg"}, {"media": data})
+        #         if response.status_code != 200:
+        #             return JsonResponse(
+        #                 {"message": "이미지 업로드 중 오류가 발생했습니다.", "error": response.json()},
+        #                 status=response.status_code,
+        #             )
+        #         media_id = response.json().get("media_id_string")
 
+        # 트윗 작성
+        params = {"status": tweet_content}
+        # if media_id:
+        #     params["media_ids"] = media_id
 
-    if response.status_code in [200, 201]:
-        return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
-    else:
+        response = api.request("statuses/update", params)
+        if response.status_code not in [200, 201]:
+            return JsonResponse(
+                {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
+                status=response.status_code,
+            )
+
         return JsonResponse(
-            {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
-            status=response.status_code,
+            {"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()}
         )
+
+    except Exception as e:
+        return JsonResponse({"message": "알 수 없는 오류가 발생했습니다.", "error": str(e)}, status=500)
+# def post_tweet(request):
+#     # 로깅
+#     logger.debug(f"Request content-type: {request.content_type}")
+#     logger.debug(f"Request body: {request.body}")
+#     """
+#     Post a tweet using OAuth 1.0a Authentication
+#     """
+#     if request.content_type == "application/json":
+#         body = json.loads(request.body)
+#         tweet_content = body.get("tweetContent")
+#     else:
+#         # application/x-www-form-urlencoded
+#         tweet_content = request.POST.get("tweetContent")
+        
+#     logger.debug(f"Extracted tweet_content: {tweet_content}")
+
+#     # OAuth1 인증 객체 생성
+#     auth = OAuth1(
+#         CONSUMER_KEY,
+#         CONSUMER_SECRET,
+#         ACCESS_TOKEN,
+#         ACCESS_TOKEN_SECRET
+#     )
+
+#     # Twitter API 요청
+#     payload = {"status": tweet_content}
+#     response = requests.post(TWITTER_API_URL, data=payload, auth=auth)
+    
+#     print("Twitter API Response Status:", response.status_code)
+#     print("Twitter API Response Content:", response.json())
+
+
+#     if response.status_code in [200, 201]:
+#         return JsonResponse({"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()})
+#     else:
+#         return JsonResponse(
+#             {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
+#             status=response.status_code,
+#         )
