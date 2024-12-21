@@ -747,14 +747,11 @@ def extract_line_after_at_yes24(text):
 
     return extracted_text
 
-
-
-
-
 TWITTER_API_URL = "https://api.twitter.com/2/tweets"
 
 BEARER_TOKEN = os.getenv("BEARER_TOKEN")
 
+@api_view(["POST"])
 def post_tweet(request):
     """
     Post a tweet using App-Only Authentication
