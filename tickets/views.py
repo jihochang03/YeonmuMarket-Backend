@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from .models import Ticket, TicketPost
 from .serializers import TicketSerializer, TicketPostSerializer
 from drf_yasg.utils import swagger_auto_schema
+import json
 from django.db.models import Q
 from .request_serializers import TicketPostListRequestSerializer, TicketPostDetailRequestSerializer
 from user.models import User
@@ -760,12 +761,20 @@ ACCESS_TOKEN_SECRET =  os.getenv("ACCESS_TOKEN_SECRET")
 TWITTER_API_URL = "https://api.twitter.com/1.1/statuses/update.json"
 
 def post_tweet(request):
+    # 로깅
+    logger.debug(f"Request content-type: {request.content_type}")
+    logger.debug(f"Request body: {request.body}")
     """
     Post a tweet using OAuth 1.0a Authentication
     """
-    tweet_content = request.POST.get("tweetContent")
-    if not tweet_content:
-        return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
+    if request.content_type == "application/json":
+        body = json.loads(request.body)
+        tweet_content = body.get("tweetContent")
+    else:
+        # application/x-www-form-urlencoded
+        tweet_content = request.POST.get("tweetContent")
+        
+    logger.debug(f"Extracted tweet_content: {tweet_content}")
 
     # OAuth1 인증 객체 생성
     auth = OAuth1(
