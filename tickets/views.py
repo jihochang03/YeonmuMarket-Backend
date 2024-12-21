@@ -300,33 +300,33 @@ pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     responses={200: '성공 시 예매 정보를 반환합니다.'}
 )
 
-def process_image_for_ocr(image_data):
-    """
-    Process the image to improve OCR accuracy.
-    """
-    # 1. 이미지를 Pillow로 로드
-    image = Image.open(BytesIO(image_data))
+# def process_image_for_ocr(image_data):
+#     """
+#     Process the image to improve OCR accuracy.
+#     """
+#     # 1. 이미지를 Pillow로 로드
+#     image = Image.open(BytesIO(image_data))
 
-    # 2. 해상도 조정 (2배 확대)
-    base_width = 2000
-    w_percent = base_width / float(image.size[0])
-    h_size = int((float(image.size[1]) * float(w_percent)))
-    image = image.resize((base_width, h_size), Image.ANTIALIAS)
+#     # 2. 해상도 조정 (2배 확대)
+#     base_width = 2000
+#     w_percent = base_width / float(image.size[0])
+#     h_size = int((float(image.size[1]) * float(w_percent)))
+#     image = image.resize((base_width, h_size), Image.ANTIALIAS)
 
-    # 3. 흑백 변환 (이진화)
-    image = image.convert("L")
-    image = image.point(lambda x: 0 if x < 140 else 255)
+#     # 3. 흑백 변환 (이진화)
+#     image = image.convert("L")
+#     image = image.point(lambda x: 0 if x < 140 else 255)
 
-    # 4. 대비 조정
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2.0)
+#     # 4. 대비 조정
+#     enhancer = ImageEnhance.Contrast(image)
+#     image = enhancer.enhance(2.0)
 
-    # 5. 노이즈 제거 (OpenCV)
-    img_array = np.array(image)
-    denoised = cv2.fastNlMeansDenoising(img_array, None, h=30, templateWindowSize=7, searchWindowSize=21)
-    image = Image.fromarray(denoised)
+#     # 5. 노이즈 제거 (OpenCV)
+#     img_array = np.array(image)
+#     denoised = cv2.fastNlMeansDenoising(img_array, None, h=30, templateWindowSize=7, searchWindowSize=21)
+#     image = Image.fromarray(denoised)
 
-    return image
+#     return image
 
 @csrf_exempt
 @api_view(['POST'])
@@ -375,7 +375,7 @@ def process_image(request):
             reserv_image.seek(0)  # Ensure file pointer is at the beginning
             logger.debug("Starting OCR processing for reservImage")
 
-            image = process_image_for_ocr(reserv_image.read())
+            image = Image.open(BytesIO(reserv_image.read()))
             logger.debug("Image loaded successfully for OCR")
 
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
