@@ -85,7 +85,7 @@ class JoinConversationView(APIView):
             return Response({
                 "detail": "You have joined the conversation.",
                 "redirect_url": chat_url,
-                "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
+                "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image_url else None
             }, status=status.HTTP_200_OK)
 
         except Ticket.DoesNotExist:
