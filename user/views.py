@@ -320,8 +320,14 @@ class KakaoSignInCallbackView(APIView):
 
         # Step 5: JWT 토큰 설정 및 응답
         try:
+            # 사용자 리다이렉션 경로 설정
+            redirect_url = request.GET.get("state", "/main/sold")  # state 값이 없으면 기본값으로 설정
+
+            # 기존 응답에 리다이렉션 URL 추가
             response = set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)
-            logger.info(f"response : {response}")
+            response.data = {
+                "redirect_url": redirect_url,
+            }
             logger.info(f"JWT token set for user: {user.username}")
             return response
         except Exception as e:
