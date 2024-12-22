@@ -321,18 +321,23 @@ class KakaoSignInCallbackView(APIView):
         # Step 5: JWT 토큰 설정 및 응답
         try:
             # 사용자 리다이렉션 경로 설정
-            redirect_url = request.GET.get("state", "/main/sold")  # state 값이 없으면 기본값으로 설정
+            redirect_url = request.GET.get("state", "/main/sold")  # state 값이 없으면 기본값 설정
 
-            # 기존 응답에 리다이렉션 URL 추가
+            # 기존 응답 생성
             response = set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)
-            response.data = {
-                "redirect_url": redirect_url,
-            }
-            logger.info(f"JWT token set for user: {user.username}")
+
+            # 기존 응답 데이터와 새로운 데이터 병합
+            if isinstance(response.data, dict):
+                response.data.update({"redirect_url": redirect_url})  # 기존 데이터에 추가
+            else:
+                response.data = {"redirect_url": redirect_url}  # 데이터가 없는 경우 새로 설정
+
+            logger.info(f"JWT token set for user: {user.username}, redirect_url: {redirect_url}")
             return response
         except Exception as e:
             logger.exception(f"Error setting JWT token: {str(e)}")
             return Response({"error": "Error setting JWT token."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class UserAccountDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
