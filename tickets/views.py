@@ -370,16 +370,16 @@ def process_image(request):
 
         # Step 4: OCR processing for reservation image
         try:
-            with Image.open(reserv_file_path) as image:
+            # Open the file directly from S3
+            with default_storage.open(reserv_file_path, 'rb') as file:
+                image = Image.open(file)
                 logger.debug("Image loaded successfully for OCR")
-
-                # Perform OCR on the image
+                
+                # Perform OCR
                 extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
                 logger.debug(f"Raw extracted text: {extracted_text}")
-
         except Exception as e:
-            logger.exception("OCR processing failed")
-            return Response({"status": "error", "message": "OCR failed."}, status=500)
+            logger.error(f"OCR processing failed: {e}")
 
         # Step 5: Keyword-specific processing
         try:
