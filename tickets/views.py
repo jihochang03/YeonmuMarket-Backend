@@ -348,54 +348,54 @@ def process_image(request):
 
         reserv_image = request.FILES['reservImage']
 
-        # Step 3: Handle unique file names and folder structure
-        def sanitize_file_name(file_name):
-            ext = file_name.split('.')[-1]
-            base_name = file_name[:-(len(ext) + 1)]
-            sanitized_name = unidecode(base_name).replace(" ", "_")
-            return f"{sanitized_name}.{ext}"
+    #     # Step 3: Handle unique file names and folder structure
+    #     def sanitize_file_name(file_name):
+    #         ext = file_name.split('.')[-1]
+    #         base_name = file_name[:-(len(ext) + 1)]
+    #         sanitized_name = unidecode(base_name).replace(" ", "_")
+    #         return f"{sanitized_name}.{ext}"
 
-        def get_unique_file_path(file, prefix="uploads"):
-            sanitized_name = sanitize_file_name(file.name)
-            unique_name = f"{uuid.uuid4().hex}_{hashlib.md5(sanitized_name.encode()).hexdigest()[:8]}.{sanitized_name.split('.')[-1]}"
-            today = datetime.now().strftime("%Y/%m/%d")
-            return f"{prefix}/{today}/{unique_name}"
+    #     def get_unique_file_path(file, prefix="uploads"):
+    #         sanitized_name = sanitize_file_name(file.name)
+    #         unique_name = f"{uuid.uuid4().hex}_{hashlib.md5(sanitized_name.encode()).hexdigest()[:8]}.{sanitized_name.split('.')[-1]}"
+    #         today = datetime.now().strftime("%Y/%m/%d")
+    #         return f"{prefix}/{today}/{unique_name}"
 
-        reserv_file_path = get_unique_file_path(reserv_image)
-        reserv_file_url = default_storage.save(reserv_file_path, reserv_image)
+    #     reserv_file_path = get_unique_file_path(reserv_image)
+    #     reserv_file_url = default_storage.save(reserv_file_path, reserv_image)
 
-        logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
+    #     logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
         
-        # Use default_storage.open to access the file on S3
-        with default_storage.open(reserv_file_path, 'rb') as s3_file:
-            # Open the file with PIL.Image
-            image = Image.open(s3_file)
+    #     # Use default_storage.open to access the file on S3
+    #     with default_storage.open(reserv_file_path, 'rb') as s3_file:
+    #         # Open the file with PIL.Image
+    #         image = Image.open(s3_file)
 
-            # Perform OCR using Tesseract
+    #         # Perform OCR using Tesseract
+    #         extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+    #         logger.debug(f"Extracted text: {extracted_text}")
+
+    #     return Response({"status": "success", "data": extracted_text}, status=200)
+
+    # except Exception as e:
+    #     return Response({"status": "error", "message": str(e)}, status=500)
+        
+
+        try:
+            reserv_image.seek(0)  # Ensure file pointer is at the beginning
+            logger.debug("Starting OCR processing for reservImage")
+
+            image = Image.open(BytesIO(reserv_image.read()))
+            logger.debug("Image loaded successfully for OCR")
+
             extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-            logger.debug(f"Extracted text: {extracted_text}")
+            logger.debug(f"Raw extracted text: {extracted_text}")
 
-        return Response({"status": "success", "data": extracted_text}, status=200)
+        except Exception as e:
+            logger.exception("OCR processing failed")
+            return Response({"status": "error", "message": "OCR failed."}, status=500)
 
-    except Exception as e:
-        return Response({"status": "error", "message": str(e)}, status=500)
-        
-
-        # try:
-        #     reserv_image.seek(0)  # Ensure file pointer is at the beginning
-        #     logger.debug("Starting OCR processing for reservImage")
-
-        #     image = Image.open(BytesIO(reserv_image.read()))
-        #     logger.debug("Image loaded successfully for OCR")
-
-        #     extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-        #     logger.debug(f"Raw extracted text: {extracted_text}")
-
-        # except Exception as e:
-        #     logger.exception("OCR processing failed")
-        #     return Response({"status": "error", "message": "OCR failed."}, status=500)
-
-        # Step 5: Keyword-specific processing
+        #Step 5: Keyword-specific processing
         try:
             if keyword == '인터파크':
                 response_data = process_interpark_data(extracted_text)
