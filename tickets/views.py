@@ -104,7 +104,7 @@ def process_and_mask_image(image):
         np_image = np.array(image)
             
         gray_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2GRAY)
-        binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        _, binary_image = cv2.threshold(gray_image, 128, 255, cv2.THRESH_BINARY)
         denoised_image = cv2.medianBlur(binary_image, 3)
 
         # OCR로 텍스트 추출
@@ -249,7 +249,7 @@ def draw_bounding_box_colors_cv_24(cv_image, width_scale=4):
                     box_y2 = y + h
                     logger.debug(f"Drawing rectangle for {color_name}: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
 
-                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", width=3)
+                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="black", width=3)
 
                 logger.debug(f"Bounding boxes drawn for {color_name}")
                 return pil_image
@@ -313,7 +313,7 @@ def draw_bounding_box_colors_cv(cv_image, width_scale=4):
                     box_y2 = y + h
                     logger.debug(f"Drawing rectangle for {color_name}: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
 
-                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", width=3)
+                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="black", width=3)
 
                 logger.debug(f"Bounding boxes drawn for {color_name}")
                 return pil_image
@@ -658,10 +658,10 @@ def process_image(request):
             image = np.array(image)
             
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            _, binary_image = cv2.threshold(gray_image, 128, 255, cv2.THRESH_BINARY)
             denoised_image = cv2.medianBlur(binary_image, 3)
 
-            extracted_text = pytesseract.image_to_string(denoised_image, lang="kor+eng")
+            extracted_text = pytesseract.image_to_string(denoised_image, output_type=pytesseract.Output.DICT, lang="kor")
             logger.debug(f"Raw extracted text: {extracted_text}")
 
         except Exception as e:
