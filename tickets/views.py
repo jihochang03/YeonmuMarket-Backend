@@ -94,7 +94,9 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 def process_and_mask_image(image):
-    """이미지에서 민감한 정보를 마스킹하여 반환합니다."""
+    """
+    이미지에서 민감한 정보를 마스킹하여 반환합니다.
+    """
     try:
         logger.debug("Starting process_and_mask_image")
         draw = ImageDraw.Draw(image)
@@ -105,11 +107,14 @@ def process_and_mask_image(image):
 
         logger.debug(f"Extracted OCR data: {data}")
 
-        for i in range(len(data["text"])):
-            if "번" in data["text"][i]:
-                x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-                if find_nearby_text(data):
-                    logger.debug(f"Found matching text near ({x}, {y}, {w}, {h})")
+        # '번'과 주변 텍스트를 검사
+        idx = find_nearby_text(data)
+        if idx != -1:
+            # '번'이 있는 위치의 x, y, w, h를 가져오기
+            for i, word in enumerate(data['text']):
+                if word == '번':
+                    x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                    logger.debug(f"Masking region for '번' at ({x}, {y}, {w}, {h})")
                     image_width = image.width
                     draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
 
@@ -122,6 +127,7 @@ def process_and_mask_image(image):
     except Exception as e:
         logger.exception("Error in masking process")
         return None
+
 
 def process_seat_image(image_file, booking_page):
     """좌석 이미지 처리 (좌석 정보 강조 표시)"""
@@ -158,24 +164,25 @@ def find_nearby_text(data):
     '번'이라는 글자를 찾고 그 주변에 '호'나 '매'가 있는지 확인합니다.
     """
     try:
-        # 텍스트 데이터 리스트 가져오기
-        text_data = data.get('text', [])
-        
-        for i, word in enumerate(text_data):
-            if '번' in word:  # 현재 단어에 '번'이 포함되어 있는지 확인
-                # 앞이나 뒤에 '호'나 '매'가 있는지 확인
-                if i > 0 and '호' in text_data[i - 1] and '매' in text_data[i - 1]:
-                    return True
-                if i < len(text_data) - 1 and ('호' in text_data[i + 1] or '매' in text_data[i + 1]):
-                    return True
+        # 텍스트 데이터를 한 줄로 연결
+        text_data = ''.join(data.get('text', []))
+        logger.debug(f"Joined text data for analysis: {text_data}")
 
-        # 조건에 맞는 경우가 없으면 False 반환
-        return False
+        # '번'의 위치를 찾아 순회
+        for idx, char in enumerate(text_data):
+            if char == '번':
+                # '번' 근처에 '호' 또는 '매'가 있는지 확인
+                if ('호' in text_data[max(0, idx - 2): idx + 3]) or ('매' in text_data[max(0, idx - 2): idx + 3]):
+                    logger.debug(f"'번' found with nearby '호' or '매' at index {idx}")
+                    return idx  # '번'의 위치 반환
+
+        logger.debug("No matching '번' found with nearby '호' or '매'")
+        return -1  # 조건에 맞는 경우가 없으면 -1 반환
 
     except Exception as e:
-        print(f"Error in find_nearby_text: {str(e)}")
-        return False
-
+        logger.exception(f"Error in find_nearby_text: {str(e)}")
+        return -1
+    
 def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
     """좌석 이미지에 검정색 박스 그리기"""
     try:
@@ -310,7 +317,7 @@ class TicketPostListView(APIView):
                     relative_path = f"tickets/{ticket.id}/{masked_seat_name}"  # 상대 경로
                     masked_url = default_storage.save(relative_path, File(masked_seat_image))
                     logger.debug(f"masked_url:{masked_url}")
-                    ticket.masked_file_url =f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_seat_name}"
+                    ticket.processed_seat_image_url =f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_seat_name}"
 
             except Exception as e:
                 logger.exception("masked_File failed")
