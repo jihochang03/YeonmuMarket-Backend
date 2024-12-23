@@ -200,28 +200,51 @@ def draw_bounding_box_purple_cv(cv_image, width_scale=4):
     """좌석 이미지에 보라색 박스 그리기"""
     try:
         logger.debug("Starting draw_bounding_box_purple_cv")
-        height, width, _ = cv_image.shape
+        
+        # Check the input image shape
+        height, width, channels = cv_image.shape
+        logger.debug(f"Image shape: height={height}, width={width}, channels={channels}")
+        
+        # Convert image to HSV color space
         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+        logger.debug("Converted image to HSV color space successfully")
+
+        # Define HSV range for purple
         lower_purple = (120, 50, 50)
         upper_purple = (140, 255, 255)
-        mask = cv2.inRange(hsv_image, lower_purple, upper_purple)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        # Create mask for purple color
+        mask = cv2.inRange(hsv_image, lower_purple, upper_purple)
+        logger.debug(f"Mask created with lower={lower_purple}, upper={upper_purple}")
+
+        # Find contours in the mask
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        logger.debug(f"Number of contours found: {len(contours)}")
+
+        # Convert OpenCV image to PIL image for drawing
         pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(pil_image)
-        for contour in contours:
+
+        # Iterate over contours and draw bounding boxes
+        for i, contour in enumerate(contours):
             x, y, w, h = cv2.boundingRect(contour)
+            logger.debug(f"Contour {i}: x={x}, y={y}, w={w}, h={h}")
+            
             box_x1 = max(0, x - w * (width_scale - 1) // 2)
             box_y1 = y
             box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
             box_y2 = y + h
-            draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", fill="red", width=3)
-        logger.debug("Bounding box (purple) drawn successfully")
+            logger.debug(f"Drawing rectangle: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
+
+            draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", fill=None, width=3)
+
+        logger.debug("Bounding boxes (purple) drawn successfully")
         return pil_image
 
     except Exception as e:
         logger.exception("Error in draw_bounding_box_purple_cv")
         return None
+
 
 
 class TicketPostListView(APIView):
@@ -817,45 +840,50 @@ def process_yes24_data(extracted_text):
         return {"status": "error", "message": str(e)}
 # 예스24 관련 예매 상태 확인 함수 정의
 def check_reservation_status_yes24(text):
-    status_pattern = r'상 태\s*(.*)'
-    match = re.search(status_pattern, text)
+    """
+    '상태'와 그 옆의 텍스트가 예매, 취소 등으로 표현되어 있을 때 추출한다.
+    예) 상태              예매
+    """
+    # '상태' 다음에 오는 글자(공백 포함 x)를 찾기
+    pattern = r'상태\s+([\w가-힣]+)'
+    match = re.search(pattern, text)
     if not match:
         return ""
-
-    
-    reservation_status = match.group(1).strip()
-    
-    return reservation_status
+    return match.group(1).strip()
 
 # 예스24 관련 날짜 정보 추출 함수
 def extract_viewing_info_yes24(text):
-    date_time_pattern = r'관 람 일 시\s*(\d{4})\.(\d{2})\.(\d{2})\s*(\d{2}):(\d{2})'
-    match = re.search(date_time_pattern, text)
-
+    """
+    예) 관람일시        2024.10.03 14:00
+    -> {'관람년도': '2024', '관람월': '10', '관람일': '03', '시간': '14:00'}
+    """
+    # 2024.10.03 14:00 형태로 파싱
+    pattern = r'관람일시\s+(\d{4})\.(\d{2})\.(\d{2})\s+(\d{2}):(\d{2})'
+    match = re.search(pattern, text)
     if not match:
-        return ""
+        return {}
 
     year, month, day, hour, minute = match.groups()
-
-    result = {
+    return {
         '관람년도': year,
         '관람월': month,
         '관람일': day,
         '시간': f"{hour}:{minute}"
     }
 
-    return result
-
 # 예스24 관련 총 결제 금액 추출 함수
 def extract_total_amount_yes24(text):
-    amount_pattern = r'결제금액*?(\d{1,3}(,\d{3})*)\s*원'
-    match = re.search(amount_pattern, text)
-
+    """
+    예) 종 결제금액       51,500원
+    -> 51500  (문자열)
+    """
+    # '종 결제금액' 뒤에 금액이 나오는 형태
+    pattern = r'(종|총)\s*결제금액\s+([\d,]+)원'
+    match = re.search(pattern, text)
     if not match:
         return ""
-
-    total_amount = match.group(1)
-    return total_amount
+    # 쉼표 제거 후 반환
+    return match.group(1).replace(",", "")
 
 # 예스24 관련 할인 금액 추출 함수
 def extract_price_grade_yes24(text):
@@ -863,31 +891,28 @@ def extract_price_grade_yes24(text):
     좌석정보 아래 또는 티켓금액 위에 위치한 할인 정보를 추출합니다.
     """
     # 정규식: 좌석정보 바로 아래 또는 티켓금액 바로 위의 '할인' 정보를 탐지
-    pattern = r'(좌석정보\s.*?\n\s*할인\s+(.*?))|(\n\s*할인\s+(.*?)\n\s*티켓금액)'
-    match = re.search(pattern, text, re.DOTALL)
+    pattern1 = r'할인금액\s*[\d,]+원\((.*?)\)'
+    match1 = re.search(pattern1, text)
+    if match1:
+        return match1.group(1).strip()
 
-    if not match:
-        return ""  # 패턴이 없으면 빈 문자열 반환
-
-    # 좌석정보 아래의 할인 또는 티켓금액 위의 할인을 추출
-    if match.group(2):  # 좌석정보 아래 할인
-        return match.group(2).strip()
-    elif match.group(4):  # 티켓금액 위 할인
-        return match.group(4).strip()
+    # (2) '할인' 뒤에 직접 할인명이 기재된 경우
+    pattern2 = r'할인\s+([^\n]+)'
+    match2 = re.search(pattern2, text)
+    if match2:
+        return match2.group(1).strip()
 
     return ""
 
 # 예스24 관련 좌석 번호 추출 함수
 def extract_seat_number_yes24(text):
-    seat_pattern = r'좌 석 정 보\s*(.*)/'
-    seat_match = re.search(seat_pattern, text)
-
-    if not seat_match:
+    pattern = r'좌석정보[^\n]*\n([^\n]*)'
+    match = re.search(pattern, text)
+    if not match:
         return ""
-
-    seat_info = seat_match.group(1).replace(' ', '')
-
-    return seat_info
+    next_line = match.group(1).strip()
+    # "열"과 "번"이 모두 있으면 반환
+    return next_line
 
 # 예스24 관련 극장명 추출 함수
 def extract_line_after_at_yes24(text):
