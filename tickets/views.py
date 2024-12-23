@@ -342,12 +342,11 @@ def process_image(request):
             return Response({"status": "error", "message": "Keyword is required."}, status=400)
 
         # Step 2: Validate uploaded files
-        if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
+        if 'reservImage' not in request.FILES:
             logger.debug(f"Uploaded files: {request.FILES.keys()}")
             return Response({"status": "error", "message": "Both files are required."}, status=400)
 
         reserv_image = request.FILES['reservImage']
-        seat_image = request.FILES['seatImage']
 
         # Step 3: Handle unique file names and folder structure
         def sanitize_file_name(file_name):
@@ -365,11 +364,9 @@ def process_image(request):
         reserv_file_path = get_unique_file_path(reserv_image)
         reserv_file_url = default_storage.save(reserv_file_path, reserv_image)
 
-        seat_file_path = get_unique_file_path(seat_image)
-        seat_file_url = default_storage.save(seat_file_path, seat_image)
-
         logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
-        logger.debug(f"Seat file path: {seat_file_path}, URL: {seat_file_url}")
+        reserv_file_path = os.path.join(settings.MEDIA_ROOT, reserv_file_path)
+        
 
         # Step 4: OCR processing for reservation image
         try:
@@ -413,7 +410,6 @@ def process_image(request):
         if request.successful_authenticator:  # Or condition based on your logic
             try:
                 default_storage.delete(reserv_file_path)
-                default_storage.delete(seat_file_path)
                 logger.debug("Uploaded files deleted successfully from S3")
             except Exception as e:
                 logger.exception("File deletion failed")
