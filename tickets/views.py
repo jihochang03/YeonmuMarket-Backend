@@ -849,7 +849,7 @@ def check_reservation_status_yes24(text):
     match = re.search(pattern, text)
     if not match:
         return ""
-    return match.group(1).strip()
+    return match.group(2).strip()
 
 # 예스24 관련 날짜 정보 추출 함수
 def extract_viewing_info_yes24(text):
@@ -906,13 +906,17 @@ def extract_price_grade_yes24(text):
 
 # 예스24 관련 좌석 번호 추출 함수
 def extract_seat_number_yes24(text):
-    pattern = r'좌석정보[^\n]*\n([^\n]*)'
+    # '전체선택' 이후의 텍스트에서 '좌석정보' 줄을 찾음
+    pattern = r'전체선택\s+좌석정보\s+([^\n]*)'
     match = re.search(pattern, text)
     if not match:
         return ""
-    next_line = match.group(1).strip()
-    # "열"과 "번"이 모두 있으면 반환
-    return next_line
+
+    # '열'과 '번'이 모두 포함된 경우만 반환
+    seat_info = match.group(1).strip()
+    return seat_info
+
+    return ""
 
 # 예스24 관련 극장명 추출 함수
 def extract_line_after_at_yes24(text):
