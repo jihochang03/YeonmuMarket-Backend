@@ -115,6 +115,7 @@ def process_and_mask_image(image):
                         print("Masking text area...")  # 디버깅: 텍스트 영역 마스킹
                         image_width = image.width
                         draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
+                    draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
     
         buffer = BytesIO()
         image.save(buffer, format="JPEG")
