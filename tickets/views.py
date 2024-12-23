@@ -46,6 +46,7 @@ from requests_oauthlib import OAuth1
 import cv2
 import numpy as np
 from django.core.files import File
+import pytesseract
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
@@ -83,6 +84,14 @@ def get_unique_file_path(file, prefix="uploads"):
     
     # 최종 경로: uploads/2024/12/23/<unique_name>
     return f"{prefix}/{unique_name}"
+
+# Logger 설정
+logger = logging.getLogger("image_processing")
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 def process_and_mask_image(image):
     """이미지에서 민감한 정보를 마스킹하여 반환합니다."""
@@ -237,7 +246,7 @@ class TicketPostListView(APIView):
                 
                 if masked_image:
                     masked_name = f"ticket_{ticket.id}_masked.jpg"
-                    ticket.masked_file_url = default_storage.save(f"uploads/tickets/{ticket.id}/{masked_name}", File(masked_image))
+                    ticket.masked_file_url = default_storage.save(f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}", File(masked_image))
 
             except Exception as e:
                 logger.exception("masked_File failed")
@@ -252,7 +261,7 @@ class TicketPostListView(APIView):
                 
                 if masked_seat_image:
                     masked_name = f"ticket_{ticket.id}_processed.jpg"
-                    ticket.masked_file_url = default_storage.save(f"uploads/tickets/{ticket.id}/{masked_name}", File(masked_image))
+                    ticket.masked_file_url = default_storage.save(f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}", File(masked_image))
 
             except Exception as e:
                 logger.exception("masked_File failed")

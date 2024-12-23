@@ -4,9 +4,10 @@ FROM python:3.10-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# 필수 패키지 설치 (libGL 포함)
+# 필수 패키지 설치 (libGL 및 Tesseract 포함)
 RUN apt-get update && apt-get install -y \
     libpq-dev gcc libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng \
+    jpegoptim optipng zlib1g-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # 작업 디렉토리 설정
@@ -22,8 +23,9 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# 필수 패키지 설치 (최종 이미지에서도 libGL 포함)
+# 필수 패키지 설치
 RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng \
+    jpegoptim optipng zlib1g-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # 작업 디렉토리 설정
@@ -43,6 +45,9 @@ ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5.00/tessdata
 
 # 정적 파일 수집
 RUN python manage.py collectstatic --noinput
+
+# Gunicorn 환경 설정
+ENV GUNICORN_CMD_ARGS="--timeout 60 --workers 2 --threads 4"
 
 # 포트 노출
 EXPOSE 8000
