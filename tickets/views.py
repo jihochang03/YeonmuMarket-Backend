@@ -373,14 +373,12 @@ def process_image(request):
 
         # Step 4: OCR processing for reservation image
         try:
-            reserv_image.seek(0)  # Ensure file pointer is at the beginning
-            logger.debug("Starting OCR processing for reservImage")
+            with Image.open(reserv_file_path) as image:
+                logger.debug("Image loaded successfully for OCR")
 
-            image = Image.open(BytesIO(reserv_image.read()))
-            logger.debug("Image loaded successfully for OCR")
-
-            extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-            logger.debug(f"Raw extracted text: {extracted_text}")
+                # Perform OCR on the image
+                extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+                logger.debug(f"Raw extracted text: {extracted_text}")
 
         except Exception as e:
             logger.exception("OCR processing failed")
