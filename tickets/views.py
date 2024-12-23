@@ -547,6 +547,7 @@ def process_image(request):
 
             image = Image.open(BytesIO(reserv_image.read()))
             logger.debug("Image loaded successfully for OCR")
+            image = np.array(image)
             
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
