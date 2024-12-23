@@ -718,6 +718,8 @@ def check_reservation_status_park(text):
     # Extracts reservation status from the text
     pattern = r'예매상태\s*(.*)'
     match = re.search(pattern, text)
+    if not match:
+        return ""
     return match.group(1).strip() if match else ""
 
 def extract_viewing_info_park(text):
@@ -739,6 +741,8 @@ def extract_ticket_number_park(text):
     # Extracts the ticket number from the text
     ticket_number_pattern = r'예매번호\s*([\dA-Za-z]+)'
     match = re.search(ticket_number_pattern, text)
+    if not match:
+        return {}
     return f"T{match.group(1)[-10:]}" if match else ""
 
 def extract_cast_park(text):
@@ -760,18 +764,24 @@ def extract_total_amount_park(text):
     # Extracts the total payment amount
     amount_pattern = r'결제금액\s*([\d,]+)\s*원'
     match = re.search(amount_pattern, text)
+    if not match:
+        return ""
     return match.group(1) if match else ""
 
 def extract_price_grade_park(text):
     # Extracts all text after "가격등급" until the end of the line
     price_grade_pattern = r'가격등급\s*(.*)'
     match = re.search(price_grade_pattern, text)
+    if not match:
+        return ""
     return match.group(1).strip() if match else ""
 
 def extract_seat_number_park(text):
     # Extracts the seat number
     seat_number_pattern = r'좌석번호\s*([\dA-Za-z]+)'
     match = re.search(seat_number_pattern, text)
+    if not match:
+        return ""
     return match.group(1) if match else ""
 
 def extract_line_after_at_park(text):
@@ -809,9 +819,9 @@ def process_yes24_data(extracted_text):
 def check_reservation_status_yes24(text):
     status_pattern = r'상 태\s*(.*)'
     match = re.search(status_pattern, text)
-    
     if not match:
-        raise ValueError("예매 상태 정보를 찾을 수 없습니다.")
+        return ""
+
     
     reservation_status = match.group(1).strip()
     
