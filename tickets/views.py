@@ -114,7 +114,7 @@ def process_and_mask_image(image):
         logger.debug(f"Extracted OCR data: {data}")
         
         for i in range(len(data['text'])):
-                if '번' in data['text'][i]:
+                if '번' in data['text'][i] :
                     x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
                     image_width = image.width
                     print(f"Found text '{data['text'][i]}' at position ({x}, {y}, {w}, {h})")  # 디버깅: 텍스트 위치 출력
@@ -786,7 +786,7 @@ def extract_line_after_at_park(text):
 def process_yes24_data(extracted_text):
     try:
         # 예스24 관련 예매 상태 및 필요한 정보 추출 처리
-        #reservation_status = check_reservation_status_yes24(extracted_text)
+        reservation_status = check_reservation_status_yes24(extracted_text)
         date_info = extract_viewing_info_yes24(extracted_text)
         total_amount = extract_total_amount_yes24(extracted_text)
         price_grade = extract_price_grade_yes24(extracted_text)
@@ -795,9 +795,8 @@ def process_yes24_data(extracted_text):
 
         return {
             "status": "success",
-            #"reservation_status": reservation_status,
+            "reservation_status": reservation_status,
             "date_info": date_info,
-            "ticket_number": ticket_number,
             "total_amount": total_amount,
             "price_grade": price_grade,
             "seat_number": seat_number,
@@ -808,7 +807,7 @@ def process_yes24_data(extracted_text):
         return JsonResponse({"status": "error", "message": str(e)})
 # 예스24 관련 예매 상태 확인 함수 정의
 def check_reservation_status_yes24(text):
-    status_pattern = r'예 매 상 태\s*(.*)'
+    status_pattern = r'상 태\s*(.*)'
     match = re.search(status_pattern, text)
     
     if not match:
@@ -839,7 +838,7 @@ def extract_viewing_info_yes24(text):
 
 # 예스24 관련 총 결제 금액 추출 함수
 def extract_total_amount_yes24(text):
-    amount_pattern = r'결 제 금 액.*?(\d{1,3}(,\d{3})*)\s*원'
+    amount_pattern = r'결제금액*?(\d{1,3}(,\d{3})*)\s*원'
     match = re.search(amount_pattern, text)
 
     if not match:
@@ -850,21 +849,23 @@ def extract_total_amount_yes24(text):
 
 # 예스24 관련 할인 금액 추출 함수
 def extract_price_grade_yes24(text):
-    line_pattern = r'할 인 금 액.*'
-    line_match = re.search(line_pattern, text)
+    """
+    좌석정보 아래 또는 티켓금액 위에 위치한 할인 정보를 추출합니다.
+    """
+    # 정규식: 좌석정보 바로 아래 또는 티켓금액 바로 위의 '할인' 정보를 탐지
+    pattern = r'(좌석정보\s.*?\n\s*할인\s+(.*?))|(\n\s*할인\s+(.*?)\n\s*티켓금액)'
+    match = re.search(pattern, text, re.DOTALL)
 
-    if not line_match:
-        return ""
+    if not match:
+        return ""  # 패턴이 없으면 빈 문자열 반환
 
-    cleaned_line = line_match.group(0).replace(' ', '')
-    
-    reason_pattern = r'\(([^)]*)\)'
-    reason_match = re.search(reason_pattern, cleaned_line)
+    # 좌석정보 아래의 할인 또는 티켓금액 위의 할인을 추출
+    if match.group(2):  # 좌석정보 아래 할인
+        return match.group(2).strip()
+    elif match.group(4):  # 티켓금액 위 할인
+        return match.group(4).strip()
 
-    if not reason_match:
-        return ""
-
-    return reason_match.group(1)
+    return ""
 
 # 예스24 관련 좌석 번호 추출 함수
 def extract_seat_number_yes24(text):
@@ -880,14 +881,13 @@ def extract_seat_number_yes24(text):
 
 # 예스24 관련 극장명 추출 함수
 def extract_line_after_at_yes24(text):
-    pattern = r']\s*(.*?)\s*》'
+    pattern = r'\]\s*\n\s*(.*?)(?:\*|$)'
     match = re.search(pattern, text)
-
     if not match:
         return ""
 
-    extracted_text = match.group(1).replace(' ', '')
-
+    # 추출된 극장명 양끝 공백 제거
+    extracted_text = match.group(1).strip()
     return extracted_text
 
 
