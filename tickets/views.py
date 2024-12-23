@@ -793,6 +793,7 @@ def process_yes24_data(extracted_text):
         seat_number = extract_seat_number_yes24(extracted_text)
         place = extract_line_after_at_yes24(extracted_text)
 
+        # 딕셔너리로 반환
         return {
             "status": "success",
             "reservation_status": reservation_status,
@@ -802,9 +803,8 @@ def process_yes24_data(extracted_text):
             "seat_number": seat_number,
             "place": place,
         }
-
     except ValueError as e:
-        return JsonResponse({"status": "error", "message": str(e)})
+        return {"status": "error", "message": str(e)}
 # 예스24 관련 예매 상태 확인 함수 정의
 def check_reservation_status_yes24(text):
     status_pattern = r'상 태\s*(.*)'
