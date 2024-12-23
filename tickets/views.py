@@ -15,7 +15,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageDraw
 from django.conf import settings
 import pytesseract
 from rest_framework.permissions import AllowAny
@@ -45,7 +45,7 @@ from unidecode import unidecode
 from requests_oauthlib import OAuth1
 import cv2
 import numpy as np
-
+from django.core.files import File
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
@@ -65,6 +65,119 @@ class TicketView(APIView):
             return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+def sanitize_file_name(file_name):
+    # 확장자 추출
+    ext = file_name.split('.')[-1]
+    base_name = file_name[:-(len(ext) + 1)]
+    # unidecode로 한글, 특수문자 등을 ASCII 범위로 치환
+    # 공백은 언더스코어(_)로 대체
+    sanitized_name = unidecode(base_name).replace(" ", "_")
+    return f"{sanitized_name}.{ext}"
+
+def get_unique_file_path(file, prefix="uploads"):
+    sanitized_name = sanitize_file_name(file.name)
+    # 예: 93a2218ba6f14f48b09af5d7c3341db2_776a8246.jpg
+    unique_name = f"{uuid.uuid4().hex}_{hashlib.md5(sanitized_name.encode()).hexdigest()[:8]}.{sanitized_name.split('.')[-1]}"
+    
+    # 날짜별 폴더 구조 (YYYY/MM/DD)
+    today = datetime.now().strftime("%Y/%m/%d")
+    
+    # 최종 경로: uploads/2024/12/23/<unique_name>
+    return f"{prefix}/{today}/{unique_name}"
+
+def process_and_mask_image(image):
+    """이미지에서 민감한 정보를 마스킹하여 반환합니다."""
+    try:
+        draw = ImageDraw.Draw(image)
+
+        # OCR로 텍스트 추출
+        data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang="kor")
+        for i in range(len(data["text"])):
+            if "번" in data["text"][i]:
+                x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+                if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
+                    image_width = image.width
+                    draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
+
+        # 마스킹된 이미지 반환
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG")
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        print(f"Error in masking process: {str(e)}")
+        return None
+
+def process_seat_image(image_file, booking_page):
+    """좌석 이미지 처리 (좌석 정보 강조 표시)"""
+    try:
+        nparr = np.frombuffer(image_file.read(), np.uint8)
+        cv_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if booking_page == "티켓링크":
+            pil_image = draw_bounding_box_no_color_cv(cv_image)
+        else:
+            pil_image = draw_bounding_box_purple_cv(cv_image)
+
+        # 처리된 이미지 반환
+        buffer = BytesIO()
+        pil_image.save(buffer, format="JPEG")
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        print(f"Error in seat image processing: {str(e)}")
+        return None
+
+
+def find_nearby_text(data, x, y, w, h, target_text):
+    """주변 텍스트가 특정 문자열과 일치하는지 확인합니다."""
+    for i in range(len(data['text'])):
+        text_x, text_y, text_w, text_h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+        if abs(text_y - y) < 20 and (text_x > x + w and text_x < x + w + 50) and data['text'][i] == target_text:
+            return True
+    return False
+
+
+def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
+    """좌석 이미지에 검정색 박스 그리기"""
+    height, width, _ = cv_image.shape
+    gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+    _, thresh_image = cv2.threshold(gray_image, 200, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_image)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w > 5 and h > 5:
+            box_x1 = max(0, x - w * (width_scale - 1) // 2)
+            box_y1 = y
+            box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+            box_y2 = y + h
+            draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="black", fill="black", width=3)
+    return pil_image
+
+
+def draw_bounding_box_purple_cv(cv_image, width_scale=4):
+    """좌석 이미지에 보라색 박스 그리기"""
+    height, width, _ = cv_image.shape
+    hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+    lower_purple = (120, 50, 50)
+    upper_purple = (140, 255, 255)
+    mask = cv2.inRange(hsv_image, lower_purple, upper_purple)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_image)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        box_x1 = max(0, x - w * (width_scale - 1) // 2)
+        box_y1 = y
+        box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+        box_y2 = y + h
+        draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="red", fill="red", width=3)
+    return pil_image
 
 class TicketPostListView(APIView):
     def post(self, request):
@@ -106,12 +219,47 @@ class TicketPostListView(APIView):
                 owner=user,
             )
 
-            # 파일 저장 경로 설정 및 URL 저장
-            reserv_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_file.name}", uploaded_file)
-            seat_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_seat_image.name}", uploaded_seat_image)
+            reserv_file_path = get_unique_file_path(uploaded_file, prefix=f"tickets/{ticket.id}")
+            seat_file_path = get_unique_file_path(uploaded_seat_image, prefix=f"tickets/{ticket.id}")
 
+            # 3) default_storage에 실제 저장
+            reserv_path = default_storage.save(reserv_file_path, uploaded_file)
+            seat_path = default_storage.save(seat_file_path, uploaded_seat_image)
+
+            # 4) DB 필드에 URL 저장
             ticket.uploaded_file_url = default_storage.url(reserv_path)
             ticket.uploaded_seat_image_url = default_storage.url(seat_path)
+        
+            try:
+                uploaded_file.seek(0)  # Ensure file pointer is at the beginning
+
+                image = Image.open(BytesIO(uploaded_file.read()))
+                logger.debug("Image loaded successfully for OCR")
+                masked_image =process_and_mask_image(image)
+                
+                if masked_image:
+                    masked_name = f"ticket_{ticket.id}_masked.jpg"
+                    ticket.masked_file_url = default_storage.save(f"tickets/{ticket.id}/{masked_name}", File(masked_image))
+
+            except Exception as e:
+                logger.exception("masked_File failed")
+                return Response({"status": "error", "message": "masked_File failed"}, status=500)
+            
+            try:
+                uploaded_seat_image.seek(0)  # Ensure file pointer is at the beginning
+
+                image = Image.open(BytesIO(uploaded_seat_image.read()))
+                logger.debug("Image loaded successfully for OCR")
+                masked_seat_image =process_seat_image(image,ticket.booking_page)
+                
+                if masked_seat_image:
+                    masked_name = f"ticket_{self.id}_processed.jpg"
+                    ticket.masked_file_url = default_storage.save(f"tickets/{self.id}/{masked_name}", File(masked_image))
+
+            except Exception as e:
+                logger.exception("masked_File failed")
+                return Response({"status": "error", "message": "masked_File failed"}, status=500)
+        
             ticket.save()
 
             # TicketPost 생성
@@ -122,8 +270,6 @@ class TicketPostListView(APIView):
 
         serializer = TicketPostSerializer(ticket_post, context={"request": request})
         response_data = serializer.data
-        response_data["ticket_id"] = ticket.id
-        response_data["masked_seat_image_url"] = ticket.processed_seat_image_url
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -347,39 +493,6 @@ def process_image(request):
             return Response({"status": "error", "message": "Both files are required."}, status=400)
 
         reserv_image = request.FILES['reservImage']
-
-    #     # Step 3: Handle unique file names and folder structure
-    #     def sanitize_file_name(file_name):
-    #         ext = file_name.split('.')[-1]
-    #         base_name = file_name[:-(len(ext) + 1)]
-    #         sanitized_name = unidecode(base_name).replace(" ", "_")
-    #         return f"{sanitized_name}.{ext}"
-
-    #     def get_unique_file_path(file, prefix="uploads"):
-    #         sanitized_name = sanitize_file_name(file.name)
-    #         unique_name = f"{uuid.uuid4().hex}_{hashlib.md5(sanitized_name.encode()).hexdigest()[:8]}.{sanitized_name.split('.')[-1]}"
-    #         today = datetime.now().strftime("%Y/%m/%d")
-    #         return f"{prefix}/{today}/{unique_name}"
-
-    #     reserv_file_path = get_unique_file_path(reserv_image)
-    #     reserv_file_url = default_storage.save(reserv_file_path, reserv_image)
-
-    #     logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
-        
-    #     # Use default_storage.open to access the file on S3
-    #     with default_storage.open(reserv_file_path, 'rb') as s3_file:
-    #         # Open the file with PIL.Image
-    #         image = Image.open(s3_file)
-
-    #         # Perform OCR using Tesseract
-    #         extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-    #         logger.debug(f"Extracted text: {extracted_text}")
-
-    #     return Response({"status": "success", "data": extracted_text}, status=200)
-
-    # except Exception as e:
-    #     return Response({"status": "error", "message": str(e)}, status=500)
-        
 
         try:
             reserv_image.seek(0)  # Ensure file pointer is at the beginning

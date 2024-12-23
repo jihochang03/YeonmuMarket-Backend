@@ -11,51 +11,6 @@ import os
 # Tesseract 설정
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
-def normalize_filename(filename):
-    """파일명을 정규화하여 특수문자 제거 및 확장자를 보존합니다."""
-    filename, file_extension = os.path.splitext(filename)
-    filename = unicodedata.normalize("NFKD", filename)
-    filename = re.sub(r"[^\w\s-]", "", filename)
-    filename = re.sub(r"[-\s]+", "-", filename).strip()
-
-    if file_extension.lower() not in [".jpg", ".jpeg", ".png"]:
-        file_extension = ".jpg"
-
-    return f"{filename}{file_extension}"
-
-
-def generate_unique_filename(ticket_id, original_name, suffix=""):
-    """Ticket ID와 원본 이름을 조합하여 고유한 파일명을 생성합니다."""
-    file_extension = original_name.split('.')[-1]
-    base_name = original_name[:-(len(file_extension) + 1)]
-    hashed_name = hashlib.md5(base_name.encode()).hexdigest()[:8]
-    return f"ticket_{ticket_id}_{suffix}_{hashed_name}.{file_extension}"
-
-
-def process_and_mask_image(image_file):
-    """이미지에서 민감한 정보를 마스킹하여 반환합니다."""
-    try:
-        image = Image.open(image_file)
-        draw = ImageDraw.Draw(image)
-
-        # OCR로 텍스트 추출
-        data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang="kor")
-        for i in range(len(data["text"])):
-            if "번" in data["text"][i]:
-                x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-                if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
-                    image_width = image.width
-                    draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
-
-        # 마스킹된 이미지 반환
-        buffer = BytesIO()
-        image.save(buffer, format="JPEG")
-        buffer.seek(0)
-        return buffer
-    except Exception as e:
-        print(f"Error in masking process: {str(e)}")
-        return None
-
 
 def process_seat_image(image_file, booking_page):
     """좌석 이미지 처리 (좌석 정보 강조 표시)"""

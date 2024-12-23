@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.core.files import File
 import os
-from .utils import normalize_filename, process_and_mask_image, process_seat_image
+#from .utils import normalize_filename, process_and_mask_image, process_seat_image
 from PIL import Image, ImageDraw
 import pytesseract
 from django.conf import settings
@@ -14,10 +14,9 @@ import unicodedata
 import re
 from django.core.files.storage import default_storage
 import uuid
-
-def get_ticket_upload_path(instance, filename):
-    """Return the upload path for the given ticket instance and filename."""
-    return f"tickets/{instance.id}/{filename}"
+from unidecode import unidecode
+from datetime import datetime
+import hashlib
 
 class Ticket(models.Model):
     id = models.AutoField(primary_key=True)
@@ -53,43 +52,6 @@ class Ticket(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # 파일 처리 로직은 별도로 호출
-        if self.uploaded_file_url and not self.masked_file_url:
-            self.process_and_save_masked_image()
-        if self.uploaded_seat_image_url and not self.processed_seat_image_url:
-            self.process_and_save_seat_image(self.booking_page)
-
-    def process_and_save_masked_image(self):
-        if self.uploaded_file_url:
-            try:
-                # S3에서 파일 다운로드
-                file_name = os.path.basename(self.uploaded_file_url)
-                local_path = default_storage.open(file_name)
-                masked_image = process_and_mask_image(local_path)
-
-                if masked_image:
-                    masked_name = f"ticket_{self.id}_masked.jpg"
-                    masked_url = default_storage.save(f"tickets/{self.id}/{masked_name}", File(masked_image))
-                    self.masked_file_url = masked_url
-                    self.save(update_fields=["masked_file_url"])
-            except Exception as e:
-                print(f"Error in masking process: {str(e)}")
-
-    def process_and_save_seat_image(self, booking_page):
-        if self.uploaded_seat_image_url:
-            try:
-                # S3에서 파일 다운로드
-                file_name = os.path.basename(self.uploaded_seat_image_url)
-                local_path = default_storage.open(file_name)
-                processed_image = process_seat_image(local_path, booking_page)
-
-                if processed_image:
-                    processed_name = f"ticket_{self.id}_processed.jpg"
-                    processed_url = default_storage.save(f"tickets/{self.id}/{processed_name}", File(processed_image))
-                    self.processed_seat_image_url = processed_url
-                    self.save(update_fields=["processed_seat_image_url"])
-            except Exception as e:
-                print(f"Error in seat image processing: {str(e)}")
 
 
 class TicketPost(models.Model):
