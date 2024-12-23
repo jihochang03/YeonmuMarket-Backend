@@ -742,7 +742,7 @@ def extract_ticket_number_park(text):
     return f"T{match.group(1)[-10:]}" if match else ""
 
 def extract_cast_park(text):
-    # Extracts main cast information from the text
+    # Extracts main cast information from the text and retrieves the last three characters of each line
     cast_pattern = r'출연진\s*(.*?)\s*수령'
     match = re.search(cast_pattern, text, re.DOTALL)
     if not match:
@@ -751,8 +751,9 @@ def extract_cast_park(text):
     cast_names = []
     for line in cast_lines:
         clean_line = line.strip()
-        if re.search(r'[가-힣]{2,}', clean_line):
-            cast_names.append(clean_line)
+        if re.search(r'[가-힣]{2,}', clean_line):  # Ensure the line contains at least 2 Korean characters
+            last_three_chars = clean_line[-3:]  # Extract the last three characters
+            cast_names.append(last_three_chars)
     return cast_names
 
 def extract_total_amount_park(text):
@@ -774,10 +775,13 @@ def extract_seat_number_park(text):
     return match.group(1) if match else ""
 
 def extract_line_after_at_park(text):
-    # Extracts the line after '@'
+    # Extracts the line after '@' and removes the trailing '>'
     at_pattern = r'@\s*(.*)'
     match = re.search(at_pattern, text)
-    return match.group(1).strip() if match else ""
+    if not match:
+        return ""
+    line_without_symbols = match.group(1).strip().rstrip('>')
+    return line_without_symbols
 
 def process_yes24_data(extracted_text):
     try:
