@@ -100,10 +100,16 @@ def process_and_mask_image(image):
     try:
         logger.debug("Starting process_and_mask_image")
         draw = ImageDraw.Draw(image)
+        
+        np_image = np.array(image)
+            
+        gray_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2GRAY)
+        binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        denoised_image = cv2.medianBlur(binary_image, 3)
 
         # OCR로 텍스트 추출
         logger.debug("Running OCR on the image")
-        data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang="kor")
+        data = pytesseract.image_to_data(denoised_image, output_type=pytesseract.Output.DICT, lang="kor")
 
         logger.debug(f"Extracted OCR data: {data}")
         
@@ -639,13 +645,13 @@ def extract_viewing_info_link(text):
 
 def extract_total_amount_link(text):
     # '총결제금액' 옆의 금액 추출
-    pattern = r'총결제금액\s*(\d{1,3}(,\d{3})*)\s*원'
+    pattern = r'([가-힣]*결제금액)\s*(\d{1,3}(,\d{3})*)\s*원'
     match = re.search(pattern, text)
 
     if not match:
         return ""
 
-    return match.group(1).replace(",", "")  # 숫자만 반환
+    return match.group(2).replace(",", "")  # 숫자만 반환
 
 def extract_line_after_at_link(text):
     # '장소' 이후의 모든 텍스트 추출
@@ -682,7 +688,7 @@ def extract_discount_info_link(text):
 
     discount_name = match.group(1).strip()  # 할인 종류 (예: '1차조기예매할인')
     discount_amount = match.group(2).replace(",", "")  # 금액 (숫자만 남김)
-    return f"{discount_name} {discount_amount}원"
+    return f"{discount_name}"
 
 def process_interpark_data(extracted_text):
     try:
