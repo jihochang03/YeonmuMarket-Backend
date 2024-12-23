@@ -110,10 +110,11 @@ def process_and_mask_image(image):
         for i in range(len(data['text'])):
                 if '번' in data['text'][i]:
                     x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                    image_width = image.width
                     print(f"Found text '{data['text'][i]}' at position ({x}, {y}, {w}, {h})")  # 디버깅: 텍스트 위치 출력
                     if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
                         print("Masking text area...")  # 디버깅: 텍스트 영역 마스킹
-                        image_width = image.width
+                        
                         draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
                     draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
     
