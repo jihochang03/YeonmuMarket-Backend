@@ -157,29 +157,13 @@ def process_seat_image(image_file, booking_page):
         logger.exception("Error in seat image processing")
         return None
 
-def find_nearby_text(data):
-    """
-    '번'이라는 글자를 찾고 그 주변에 '호'나 '매'가 있는지 확인합니다.
-    """
-    try:
-        # 텍스트 데이터를 한 줄로 연결
-        text_data = ''.join(data.get('text', []))
-        logger.debug(f"Joined text data for analysis: {text_data}")
-
-        # '번'의 위치를 찾아 순회
-        for idx, char in enumerate(text_data):
-            if char == '번':
-                # '번' 근처에 '호' 또는 '매'가 있는지 확인
-                if ('호' in text_data[max(0, idx - 2): idx + 3]) or ('매' in text_data[max(0, idx - 2): idx + 3]):
-                    logger.debug(f"'번' found with nearby '호' or '매' at index {idx}")
-                    return idx  # '번'의 위치 반환
-
-        logger.debug("No matching '번' found with nearby '호' or '매'")
-        return -1  # 조건에 맞는 경우가 없으면 -1 반환
-
-    except Exception as e:
-        logger.exception(f"Error in find_nearby_text: {str(e)}")
-        return -1
+def find_nearby_text(data, x, y, w, h, target_text):
+    """Find nearby text matching the target."""
+    for i in range(len(data['text'])):
+        text_x, text_y, text_w, text_h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+        if abs(text_y - y) < 20 and (text_x > x + w and text_x < x + w + 50) and data['text'][i] == target_text:
+            return True
+    return False
     
 def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
     """좌석 이미지에 검정색 박스 그리기"""
