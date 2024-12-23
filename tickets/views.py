@@ -148,9 +148,12 @@ def process_seat_image(image_file, booking_page):
         if booking_page == "티켓링크":
             logger.debug("Using no-color bounding box for 티켓링크")
             pil_image = draw_bounding_box_no_color_cv(cv_image)
+        elif booking_page == "예스24":
+            logger.debug("Using no-color bounding box for 예스24")
+            pil_image = draw_bounding_box_no_color_cv(cv_image)
         else:
             logger.debug("Using purple bounding box")
-            pil_image = draw_bounding_box_purple_cv(cv_image)
+            pil_image = draw_bounding_box_no_color_cv(cv_image)
 
         buffer = BytesIO()
         pil_image.save(buffer, format="JPEG")
