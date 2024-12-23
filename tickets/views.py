@@ -108,7 +108,7 @@ def process_and_mask_image(image):
         for i in range(len(data["text"])):
             if "번" in data["text"][i]:
                 x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-                if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
+                if find_nearby_text(data):
                     logger.debug(f"Found matching text near ({x}, {y}, {w}, {h})")
                     image_width = image.width
                     draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
@@ -127,7 +127,13 @@ def process_seat_image(image_file, booking_page):
     """좌석 이미지 처리 (좌석 정보 강조 표시)"""
     try:
         logger.debug("Starting process_seat_image")
-        nparr = np.frombuffer(image_file.read(), np.uint8)
+        # Pillow Image 객체를 BytesIO로 변환
+        buffer = BytesIO()
+        image_file.save(buffer, format="JPEG")
+        buffer.seek(0)
+
+        # BytesIO 객체에서 OpenCV 이미지로 변환
+        nparr = np.frombuffer(buffer.read(), np.uint8)
         cv_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if booking_page == "티켓링크":
@@ -147,19 +153,27 @@ def process_seat_image(image_file, booking_page):
         logger.exception("Error in seat image processing")
         return None
 
-def find_nearby_text(data, x, y, w, h, target_text):
-    """주변 텍스트가 특정 문자열과 일치하는지 확인합니다."""
+def find_nearby_text(data):
+    """
+    '번'이라는 글자를 찾고 그 주변에 '호'나 '매'가 있는지 확인합니다.
+    """
     try:
-        logger.debug(f"Finding nearby text for target: {target_text}")
-        for i in range(len(data['text'])):
-            text_x, text_y, text_w, text_h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
-            if abs(text_y - y) < 20 and (text_x > x + w and text_x < x + w + 50) and data['text'][i] == target_text:
-                logger.debug(f"Found nearby text: {target_text} at ({text_x}, {text_y})")
-                return True
-        logger.debug(f"No nearby text found for target: {target_text}")
+        # 텍스트 데이터 리스트 가져오기
+        text_data = data.get('text', [])
+        
+        for i, word in enumerate(text_data):
+            if '번' in word:  # 현재 단어에 '번'이 포함되어 있는지 확인
+                # 앞이나 뒤에 '호'나 '매'가 있는지 확인
+                if i > 0 and ('호' in text_data[i - 1] or '매' in text_data[i - 1]):
+                    return True
+                if i < len(text_data) - 1 and ('호' in text_data[i + 1] or '매' in text_data[i + 1]):
+                    return True
+
+        # 조건에 맞는 경우가 없으면 False 반환
         return False
+
     except Exception as e:
-        logger.exception("Error in finding nearby text")
+        print(f"Error in find_nearby_text: {str(e)}")
         return False
 
 def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
