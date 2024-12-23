@@ -547,8 +547,12 @@ def process_image(request):
 
             image = Image.open(BytesIO(reserv_image.read()))
             logger.debug("Image loaded successfully for OCR")
+            
+            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            denoised_image = cv2.medianBlur(binary_image, 3)
 
-            extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+            extracted_text = pytesseract.image_to_string(denoised_image, lang="kor+eng")
             logger.debug(f"Raw extracted text: {extracted_text}")
 
         except Exception as e:
