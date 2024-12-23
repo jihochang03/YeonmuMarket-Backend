@@ -419,15 +419,6 @@ def process_image(request):
         logger.exception("Unexpected error during image processing")
         return Response({"status": "error", "message": f"Unexpected error: {str(e)}"}, status=500)
 
-    finally:
-        # Step 7: Cleanup files only on failure
-        if request.successful_authenticator:  # Or condition based on your logic
-            try:
-                default_storage.delete(reserv_file_path)
-                logger.debug("Uploaded files deleted successfully from S3")
-            except Exception as e:
-                logger.exception("File deletion failed")
-
 
 def process_link_data(extracted_text):
     try:
