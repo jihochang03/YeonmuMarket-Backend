@@ -79,9 +79,7 @@ def get_unique_file_path(file, prefix="uploads"):
     sanitized_name = sanitize_file_name(file.name)
     # 예: 93a2218ba6f14f48b09af5d7c3341db2_776a8246.jpg
     unique_name = f"{uuid.uuid4().hex}_{hashlib.md5(sanitized_name.encode()).hexdigest()[:8]}.{sanitized_name.split('.')[-1]}"
-    
-    # 날짜별 폴더 구조 (YYYY/MM/DD)
-    today = datetime.now().strftime("%Y/%m/%d")
+
     
     # 최종 경로: uploads/2024/12/23/<unique_name>
     return f"{prefix}/{unique_name}"
@@ -239,7 +237,7 @@ class TicketPostListView(APIView):
                 
                 if masked_image:
                     masked_name = f"ticket_{ticket.id}_masked.jpg"
-                    ticket.masked_file_url = default_storage.save(f"tickets/{ticket.id}/{masked_name}", File(masked_image))
+                    ticket.masked_file_url = default_storage.save(f"uploads/tickets/{ticket.id}/{masked_name}", File(masked_image))
 
             except Exception as e:
                 logger.exception("masked_File failed")
@@ -253,8 +251,8 @@ class TicketPostListView(APIView):
                 masked_seat_image =process_seat_image(image,ticket.booking_page)
                 
                 if masked_seat_image:
-                    masked_name = f"ticket_{self.id}_processed.jpg"
-                    ticket.masked_file_url = default_storage.save(f"tickets/{self.id}/{masked_name}", File(masked_image))
+                    masked_name = f"ticket_{ticket.id}_processed.jpg"
+                    ticket.masked_file_url = default_storage.save(f"uploads/tickets/{ticket.id}/{masked_name}", File(masked_image))
 
             except Exception as e:
                 logger.exception("masked_File failed")
