@@ -106,18 +106,16 @@ def process_and_mask_image(image):
         data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, lang="kor")
 
         logger.debug(f"Extracted OCR data: {data}")
-
-        # '번'과 주변 텍스트를 검사
-        idx = find_nearby_text(data)
-        if idx != -1:
-            # '번'이 있는 위치의 x, y, w, h를 가져오기
-            for i, word in enumerate(data['text']):
-                if word == '번':
+        
+        for i in range(len(data['text'])):
+                if '번' in data['text'][i]:
                     x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
-                    logger.debug(f"Masking region for '번' at ({x}, {y}, {w}, {h})")
-                    image_width = image.width
-                    draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
-
+                    print(f"Found text '{data['text'][i]}' at position ({x}, {y}, {w}, {h})")  # 디버깅: 텍스트 위치 출력
+                    if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
+                        print("Masking text area...")  # 디버깅: 텍스트 영역 마스킹
+                        image_width = image.width
+                        draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
+    
         buffer = BytesIO()
         image.save(buffer, format="JPEG")
         buffer.seek(0)
