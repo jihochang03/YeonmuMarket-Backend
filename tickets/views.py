@@ -365,21 +365,35 @@ def process_image(request):
         reserv_file_url = default_storage.save(reserv_file_path, reserv_image)
 
         logger.debug(f"Reserv file path: {reserv_file_path}, URL: {reserv_file_url}")
-        reserv_file_path = os.path.join(settings.MEDIA_ROOT, reserv_file_path)
+        
+        # Use default_storage.open to access the file on S3
+        with default_storage.open(reserv_file_path, 'rb') as s3_file:
+            # Open the file with PIL.Image
+            image = Image.open(s3_file)
+
+            # Perform OCR using Tesseract
+            extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+            logger.debug(f"Extracted text: {extracted_text}")
+
+        return Response({"status": "success", "data": extracted_text}, status=200)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=500)
         
 
-        # Step 4: OCR processing for reservation image
-        try:
-            # Open the file directly from S3
-            with default_storage.open(reserv_file_path, 'rb') as file:
-                image = Image.open(file)
-                logger.debug("Image loaded successfully for OCR")
-                
-                # Perform OCR
-                extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
-                logger.debug(f"Raw extracted text: {extracted_text}")
-        except Exception as e:
-            logger.error(f"OCR processing failed: {e}")
+        # try:
+        #     reserv_image.seek(0)  # Ensure file pointer is at the beginning
+        #     logger.debug("Starting OCR processing for reservImage")
+
+        #     image = Image.open(BytesIO(reserv_image.read()))
+        #     logger.debug("Image loaded successfully for OCR")
+
+        #     extracted_text = pytesseract.image_to_string(image, lang="kor+eng")
+        #     logger.debug(f"Raw extracted text: {extracted_text}")
+
+        # except Exception as e:
+        #     logger.exception("OCR processing failed")
+        #     return Response({"status": "error", "message": "OCR failed."}, status=500)
 
         # Step 5: Keyword-specific processing
         try:
