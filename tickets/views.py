@@ -164,7 +164,7 @@ def find_nearby_text(data):
         for i, word in enumerate(text_data):
             if '번' in word:  # 현재 단어에 '번'이 포함되어 있는지 확인
                 # 앞이나 뒤에 '호'나 '매'가 있는지 확인
-                if i > 0 and ('호' in text_data[i - 1] or '매' in text_data[i - 1]):
+                if i > 0 and '호' in text_data[i - 1] and '매' in text_data[i - 1]:
                     return True
                 if i < len(text_data) - 1 and ('호' in text_data[i + 1] or '매' in text_data[i + 1]):
                     return True
@@ -290,8 +290,10 @@ class TicketPostListView(APIView):
                 
                 if masked_image:
                     masked_name = f"ticket_{ticket.id}_masked.jpg"
-                    ticket.masked_file_url = default_storage.save(f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}", File(masked_image))
-
+                    relative_path = f"tickets/{ticket.id}/{masked_name}"  # 상대 경로
+                    masked_url = default_storage.save(relative_path, File(masked_image))
+                    logger.debug(f"masked_url:{masked_url}")
+                    ticket.masked_file_url = f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}"
             except Exception as e:
                 logger.exception("masked_File failed")
                 return Response({"status": "error", "message": "masked_File failed"}, status=500)
@@ -304,8 +306,11 @@ class TicketPostListView(APIView):
                 masked_seat_image =process_seat_image(image,ticket.booking_page)
                 
                 if masked_seat_image:
-                    masked_name = f"ticket_{ticket.id}_processed.jpg"
-                    ticket.masked_file_url = default_storage.save(f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}", File(masked_image))
+                    masked_seat_name = f"ticket_{ticket.id}_processed.jpg"
+                    relative_path = f"tickets/{ticket.id}/{masked_seat_name}"  # 상대 경로
+                    masked_url = default_storage.save(relative_path, File(masked_seat_image))
+                    logger.debug(f"masked_url:{masked_url}")
+                    ticket.masked_file_url =f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_seat_name}"
 
             except Exception as e:
                 logger.exception("masked_File failed")
