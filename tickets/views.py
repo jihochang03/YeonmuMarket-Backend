@@ -849,7 +849,7 @@ def check_reservation_status_yes24(text):
     match = re.search(pattern, text)
     if not match:
         return ""
-    return match.group(2).strip()
+    return match.group(1).strip()
 
 # 예스24 관련 날짜 정보 추출 함수
 def extract_viewing_info_yes24(text):
@@ -883,7 +883,7 @@ def extract_total_amount_yes24(text):
     if not match:
         return ""
     # 쉼표 제거 후 반환
-    return match.group(1).replace(",", "")
+    return match.group(2).replace(",", "")
 
 # 예스24 관련 할인 금액 추출 함수
 def extract_price_grade_yes24(text):
