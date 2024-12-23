@@ -84,7 +84,7 @@ def get_unique_file_path(file, prefix="uploads"):
     today = datetime.now().strftime("%Y/%m/%d")
     
     # 최종 경로: uploads/2024/12/23/<unique_name>
-    return f"{prefix}/{today}/{unique_name}"
+    return f"{prefix}/{unique_name}"
 
 def process_and_mask_image(image):
     """이미지에서 민감한 정보를 마스킹하여 반환합니다."""
@@ -248,7 +248,7 @@ class TicketPostListView(APIView):
             try:
                 uploaded_seat_image.seek(0)  # Ensure file pointer is at the beginning
 
-                image = Image.open(BytesIO(uploaded_seat_image.read()))
+                image = Image.open(uploaded_seat_image)
                 logger.debug("Image loaded successfully for OCR")
                 masked_seat_image =process_seat_image(image,ticket.booking_page)
                 
