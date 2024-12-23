@@ -27,48 +27,106 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from user.models import UserProfile
 from payments.models import Account
+from django.middleware.csrf import get_token
 
 kakao_secret = settings.KAKAO_KEY
-kakao_redirect_uri = settings.KAKAO_REDIRECT_URI
+kakao_redirect_uri = 'https://www.yeonmu.shop/auth'
 
 def set_token_on_response_cookie(user, status_code) -> Response:
     token = RefreshToken.for_user(user)
     userProfile = UserProfile.objects.get(user=user)
     serialized_data = UserProfileSerializer(userProfile).data
     res = Response(serialized_data, status=status_code)
-    res.set_cookie("refresh_token", value=str(token))
-    res.set_cookie("access_token", value=str(token.access_token))
+    res.set_cookie(
+        "refresh_token",
+        value=str(token),
+        httponly=True,  # Only accessible via HTTP, improves security
+        secure=True,  # Ensures cookies are sent over HTTPS only
+        samesite="None",  # Required for cross-origin requests
+        domain=".yeonmu.shop",
+    )
+    res.set_cookie(
+        "access_token",
+        value=str(token.access_token),
+        httponly=True,  # Same as above
+        secure=True,
+        samesite="None",
+        domain=".yeonmu.shop",
+    )
     return res
+
+import logging
+
+logger = logging.getLogger("django")
 
 class KakaoLoginView(View):
     def get(self, request):
-        kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={kakao_secret}&redirect_uri={kakao_redirect_uri}&response_type=code"
+        kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={kakao_secret}&redirect_uri=https://www.yeonmu.shop/auth&response_type=code"
+        logger.info(f"Kakao redirect URI: {kakao_redirect_uri}")
         return redirect(kakao_auth_url)
 
+@method_decorator(csrf_exempt, name='dispatch')
+class TokenCSRFView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        csrf_token = get_token(request)
+        response = Response({"detail": "token CSRF"}, status=status.HTTP_200_OK)
+        response.set_cookie(
+            key='csrftoken',
+            value=csrf_token,
+            domain='.yeonmu.shop',
+            secure=True,
+            httponly=False, # 반드시 False
+            samesite='None'
+        )
+        return response
 class TokenRefreshView(APIView):
     @swagger_auto_schema(
         operation_id="토큰 재발급",
         operation_description="access 토큰을 재발급 받습니다.",
         request_body=TokenRefreshRequestSerializer,
         responses={200: UserSerializer, 400: "Bad Request", 401: "Unauthorized"},
-        manual_parameters=[openapi.Parameter("Authorization", openapi.IN_HEADER, description="access token", type=openapi.TYPE_STRING)]
+        manual_parameters=[
+            openapi.Parameter(
+                "Authorization", openapi.IN_HEADER,
+                description="access token",
+                type=openapi.TYPE_STRING
+            )
+        ]
     )
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:
             return Response(
-                {"detail": "no refresh token"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "no refresh token provided"}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            RefreshToken(refresh_token).verify()
-        except:
+            # Refresh Token 검증
+            token = RefreshToken(refresh_token)
+            token.verify()
+        except Exception as e:
             return Response(
-                {"detail": "please signin again."}, status=status.HTTP_401_UNAUTHORIZED
+                {"detail": "Invalid or expired refresh token", "error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
             )
-        new_access_token = str(RefreshToken(refresh_token).access_token)
-        response = Response({"detail": "token refreshed"}, status=status.HTTP_200_OK)
-        response.set_cookie("access_token", value=str(new_access_token), httponly=True)
+
+        # 새로운 Access Token 생성
+        new_access_token = str(token.access_token)
+
+        # Access Token을 쿠키로 설정
+        response = Response(
+            {"detail": "Access token refreshed successfully"},
+            status=status.HTTP_200_OK
+        )
+        response.set_cookie(
+            "access_token",
+            value=new_access_token,
+            httponly=True,
+            secure=True,  # HTTPS를 사용하는 경우에만 활성화
+            max_age=15 * 60,  # Access Token 만료 시간 (15분)
+        )
         return response
 
 
@@ -176,31 +234,39 @@ class CheckUsernameView(APIView):
             return Response({"message": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"message": "Username is available"}, status=status.HTTP_200_OK)
     
+import logging
+
+logger = logging.getLogger("django")
+
 @method_decorator(csrf_exempt, name='dispatch')
 class KakaoSignInCallbackView(APIView):
     permission_classes = [AllowAny]
+
     def post(self, request):
         # Step 1: Authorization code 확인
         code = request.GET.get("code")
-        print(f"Authorization code received: {code}")  # 디버깅: Authorization code 출력
-        
+        logger.info(f"Authorization code received: {code}")
+
         if not code:
+            logger.error("Authorization code is missing.")
             return Response({"error": "Authorization code is missing."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Step 2: 카카오 토큰 요청 URL 구성 및 요청
         request_uri = f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={kakao_secret}&redirect_uri={kakao_redirect_uri}&code={code}"
-        print(f"Token request URL: {request_uri}")  # 디버깅: 카카오 토큰 요청 URL 출력
+        logger.debug(f"Token request URL: {request_uri}")
+
         try:
             response = requests.post(request_uri)
             response_data = response.json()
-            print("Kakao token response:", response_data)  # 디버깅: 카카오 응답 출력
+            logger.info(f"Kakao token response: {response_data}")
 
             access_token = response_data.get("access_token")
-            print(f"Access token received: {access_token}")  # 디버깅: Access token 출력
+            logger.info(f"Access token received: {access_token}")
             if not access_token:
+                logger.error("Failed to retrieve access token.")
                 return Response({"error": "Failed to retrieve access token."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(f"Error requesting access token: {str(e)}")  # 디버깅: 에러 메시지 출력
+            logger.exception(f"Error requesting access token: {str(e)}")
             return Response({"error": "Error requesting access token."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Step 3: 액세스 토큰으로 사용자 정보 가져오기
@@ -210,57 +276,68 @@ class KakaoSignInCallbackView(APIView):
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             user_info = user_info_response.json()
-            print("Kakao user info response:", user_info)  # 디버깅: 사용자 정보 응답 출력
+            logger.info(f"Kakao user info response: {user_info}")
 
             if 'id' not in user_info:
-                print("Kakao user info missing 'id' field.")  # 디버깅: 사용자 정보 오류 출력
+                logger.error("Kakao user info missing 'id' field.")
                 return Response({"error": "Failed to retrieve user information."}, status=status.HTTP_400_BAD_REQUEST)
 
             kakao_id = user_info.get("id")
             kakao_email = user_info.get("kakao_account", {}).get("email", "no_email")
-            print(f"Kakao ID: {kakao_id}, Email: {kakao_email}")  # 디버깅: 사용자 ID 및 이메일 출력
+            logger.info(f"Kakao ID: {kakao_id}, Email: {kakao_email}")
         except Exception as e:
-            print(f"Error fetching user info: {str(e)}")  # 디버깅: 에러 메시지 출력
+            logger.exception(f"Error fetching user info: {str(e)}")
             return Response({"error": "Error fetching user info."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Step 4: 사용자 조회 또는 생성
         try:
             user = User.objects.get(username=kakao_id)
-            print(f"User already exists: {user.username}")  # 디버깅: 사용자 이미 존재
+            logger.info(f"User already exists: {user.username}")
         except User.DoesNotExist:
-            print("User does not exist. Creating new user.")  # 디버깅: 사용자 없음
+            logger.info("User does not exist. Creating new user.")
             # 새로운 사용자 생성
             user_data = {
                 "username": kakao_id,
                 "password": "social_login_password",  # 기본 비밀번호 설정
             }
             user_serializer = UserSerializer(data=user_data)
-            print(f"User data for serializer: {user_data}")  # 디버깅: 직렬화 데이터 출력
+            logger.debug(f"User data for serializer: {user_data}")
             if user_serializer.is_valid():
                 user_serializer.validated_data["password"] = make_password(user_serializer.validated_data["password"])
                 user = user_serializer.save()
-                print(f"New user created: {user.username}")  # 디버깅: 새 사용자 생성 로그
+                logger.info(f"New user created: {user.username}")
             else:
-                print("User serializer errors:", user_serializer.errors)  # 디버깅: 직렬화 에러 출력
+                logger.error(f"User serializer errors: {user_serializer.errors}")
                 return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
             # 사용자 프로필 생성
             try:
                 UserProfile.objects.create(user=user, is_social_login=True, kakao_email=kakao_email)
-                print(f"User profile created for user: {user.username}")  # 디버깅: 프로필 생성 로그
+                logger.info(f"User profile created for user: {user.username}")
             except Exception as e:
-                print(f"Error creating user profile: {str(e)}")  # 디버깅: 프로필 생성 에러 출력
+                logger.exception(f"Error creating user profile: {str(e)}")
                 return Response({"error": "Error creating user profile."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Step 5: JWT 토큰 설정 및 응답
         try:
+            # 사용자 리다이렉션 경로 설정
+            redirect_url = request.GET.get("state", "/main/sold")  # state 값이 없으면 기본값 설정
+
+            # 기존 응답 생성
             response = set_token_on_response_cookie(user, status_code=status.HTTP_200_OK)
-            print(f"JWT token set for user: {user.username}")  # 디버깅: 토큰 설정 성공 로그
+
+            # 기존 응답 데이터와 새로운 데이터 병합
+            if isinstance(response.data, dict):
+                response.data.update({"redirect_url": redirect_url})  # 기존 데이터에 추가
+            else:
+                response.data = {"redirect_url": redirect_url}  # 데이터가 없는 경우 새로 설정
+
+            logger.info(f"JWT token set for user: {user.username}, redirect_url: {redirect_url}")
             return response
         except Exception as e:
-            print(f"Error setting JWT token: {str(e)}")  # 디버깅: 토큰 설정 에러 출력
+            logger.exception(f"Error setting JWT token: {str(e)}")
             return Response({"error": "Error setting JWT token."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 class UserAccountDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 

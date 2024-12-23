@@ -60,7 +60,7 @@ class JoinConversationView(APIView):
             # Redirect to chat page if the user is the owner of the conversation
             if user == conversation.owner:
                 print(f"[JoinConversationView] Conversation is yours: {conversation.owner}")
-                chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
+                chat_url = f"https://www.yeonmu.shop/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
                 return Response({"detail": "Conversation is yours.", "redirect_url": chat_url}, status=status.HTTP_200_OK)
             
             # If the conversation is full
@@ -68,7 +68,11 @@ class JoinConversationView(APIView):
                 print(f"[JoinConversationView] Conversation full or already joined by another user: {conversation.transferee}")
                 return Response({"detail": "Conversation full or already joined."}, status=status.HTTP_403_FORBIDDEN)
 
-            # If the conversation is not full, assign transferee and update status
+            elif user == conversation.transferee:
+                print(f"[JoinConversationView] Conversation is yours: {conversation.transferee}")
+                chat_url = f"https://www.yeonmu.shop/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
+                return Response({"detail": "Conversation is yours.", "redirect_url": chat_url}, status=status.HTTP_200_OK)# If the conversation is not full, assign transferee and update status
+            
             elif not conversation.transferee:
                 conversation.transferee = user
                 conversation.save()
@@ -77,16 +81,15 @@ class JoinConversationView(APIView):
                 print(f"[JoinConversationView] User {user} joined the conversation {conversation}")
 
             # Update ticket status to 'transfer_pending'
-            ticket.status = 'transfer_pending'
-            ticket.save()
-            print(f"[JoinConversationView] Ticket status updated to 'transfer_pending': {ticket.status}")
+                ticket.status = 'transfer_pending'
+                ticket.save()
+                print(f"[JoinConversationView] Ticket status updated to 'transfer_pending': {ticket.status}")
 
-            chat_url = f"http://localhost:5173/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
-            return Response({
-                "detail": "You have joined the conversation.",
-                "redirect_url": chat_url,
-                "uploaded_seat_image": ticket.uploaded_seat_image.url if ticket.uploaded_seat_image else None
-            }, status=status.HTTP_200_OK)
+                chat_url = f"https://www.yeonmu.shop/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
+                return Response({
+                    "detail": "You have joined the conversation.",
+                    "redirect_url": chat_url,
+                }, status=status.HTTP_200_OK)
 
         except Ticket.DoesNotExist:
             print(f"[JoinConversationView] Ticket with id {ticket_id} does not exist.")
