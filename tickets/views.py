@@ -118,11 +118,8 @@ def process_and_mask_image(image):
                     x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
                     image_width = image.width
                     print(f"Found text '{data['text'][i]}' at position ({x}, {y}, {w}, {h})")  # 디버깅: 텍스트 위치 출력
-                    if find_nearby_text(data, x, y, w, h, "매") or find_nearby_text(data, x, y, w, h, "호"):
-                        print("Masking text area...")  # 디버깅: 텍스트 영역 마스킹
-                        
-                        draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
                     draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
+                    break  # 첫 번째 "번" 조건 만족 시 루프 종료
     
         buffer = BytesIO()
         image.save(buffer, format="JPEG")
@@ -597,7 +594,7 @@ def process_link_data(extracted_text):
         date_info = extract_viewing_info_link(extracted_text)
         total_amount = extract_total_amount_link(extracted_text)
         price_grade = extract_discount_info_link(extracted_text)
-        seat_number = extract_line_with_yeol_and_beon(extracted_text)
+        seat_number = extract_line_with_yeol_and_beon_link(extracted_text)
         place = extract_line_after_at_link(extracted_text)
 
         # 딕셔너리로 반환
@@ -666,7 +663,7 @@ def extract_line_after_at_link(text):
 
     return location_info
     
-def extract_line_with_yeol_and_beon(text):
+def extract_line_with_yeol_and_beon_link(text):
     # '열'과 '번'이 포함된 줄 추출
     pattern = r'좌석정보[^\n]*\n([^\n]*)'
     match = re.search(pattern, text)
@@ -692,14 +689,14 @@ def extract_discount_info_link(text):
 
 def process_interpark_data(extracted_text):
     try:
-        reservation_status = check_reservation_status_link(extracted_text)
-        date_info = extract_viewing_info(extracted_text)
-        ticket_number = extract_ticket_number(extracted_text)
-        cast_info = extract_cast(extracted_text)
-        total_amount = extract_total_amount(extracted_text)
-        price_grade = extract_price_grade(extracted_text)
-        seat_number = extract_seat_number(extracted_text)
-        place = extract_line_after_at(extracted_text)
+        reservation_status = check_reservation_status_park(extracted_text)
+        date_info = extract_viewing_info_park(extracted_text)
+        ticket_number = extract_ticket_number_park(extracted_text)
+        cast_info = extract_cast_park(extracted_text)
+        total_amount = extract_total_amount_park(extracted_text)
+        price_grade = extract_price_grade_park(extracted_text)
+        seat_number = extract_seat_number_park(extracted_text)
+        place = extract_line_after_at_park(extracted_text)
 
         return {
             "status": "success",
@@ -717,96 +714,73 @@ def process_interpark_data(extracted_text):
         return JsonResponse({"status": "error", "message": str(e)})
 # 아래는 예매 정보 추출을 위한 함수들 (기존 코드)
 
+def check_reservation_status_park(text):
+    # Extracts reservation status from the text
+    pattern = r'예매상태\s*(.*)'
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else ""
 
-def extract_viewing_info(text):
-    date_time_pattern = r'관 람 일 시\s*(\d{4})\.(\d{2})\.(\d{2})\(\s*(\w{1})\s*\)\s*(\d{2}):(\d{2})'
+def extract_viewing_info_park(text):
+    # Extracts viewing information (date and time) from the text
+    date_time_pattern = r'관람일시\s*(\d{4})\.(\d{2})\.(\d{2})\(\s*([가-힣]{1})\s*\)\s*(\d{2}):(\d{2})'
     match = re.search(date_time_pattern, text)
-
     if not match:
-        return ""
-
+        return {}
     year, month, day, day_of_week, hour, minute = match.groups()
-    result = {
+    return {
         '관람년도': year,
         '관람월': month,
         '관람일': day,
+        '관람요일': day_of_week,
         '관람시간': {
             '시': hour,
             '분': minute
         }
     }
 
-    return result
-
-def extract_ticket_number(text):
-    ticket_number_pattern = r'예 매 번 호\s*([A-Za-z0-9]+)'
+def extract_ticket_number_park(text):
+    # Extracts the ticket number from the text
+    ticket_number_pattern = r'예매번호\s*([\dA-Za-z]+)'
     match = re.search(ticket_number_pattern, text)
+    return f"T{match.group(1)[-10:]}" if match else ""
 
-    if not match:
-        return ""
-
-    ticket_number = match.group(1)[-10:]
-    result = f"T{ticket_number}"
-    return result
-
-def extract_cast(text):
-    cast_pattern = r'주 요 출 연 진\s*(.*?)\s*티 켓 수 령 방 법'
+def extract_cast_park(text):
+    # Extracts main cast information from the text
+    cast_pattern = r'주요출연진\s*(.*?)\s*수령방법'
     match = re.search(cast_pattern, text, re.DOTALL)
-
     if not match:
-        return ""
-
+        return []
     cast_lines = match.group(1).splitlines()
     cast_names = []
     for line in cast_lines:
         clean_line = line.strip()
-        name_match = re.search(r'[\uAC00-\uD7A3]{1,2}\s*[\uAC00-\uD7A3]{1,2}\s*[\uAC00-\uD7A3]{1,2}$', clean_line)
-        if name_match:
-            full_name = name_match.group().replace(' ', '')
-            last_three_chars = full_name[-3:]
-            cast_names.append(last_three_chars)
-
+        if re.search(r'[가-힣]{2,}', clean_line):
+            cast_names.append(clean_line)
     return cast_names
 
-def extract_total_amount(text):
-    amount_pattern = r'총 결 제 금 액.*?(\d{1,3}(,\d{3})*)\s*원'
+def extract_total_amount_park(text):
+    # Extracts the total payment amount
+    amount_pattern = r'총결제금액\s*([\d,]+)\s*원'
     match = re.search(amount_pattern, text)
+    return match.group(1) if match else ""
 
-    if not match:
-        return ""
-
-    total_amount = match.group(1)
-    return total_amount
-
-def extract_price_grade(text):
-    price_grade_pattern = r'가 격 등 급\s*_\s*(.*?)\s*%'
+def extract_price_grade_park(text):
+    # Extracts the price grade
+    price_grade_pattern = r'가격등급\s*(.*?)\s*\('
     match = re.search(price_grade_pattern, text)
+    return match.group(1).replace(' ', '') if match else ""
 
-    if not match:
-        return ""
-
-    price_grade = match.group(1).replace(' ', '')
-    return price_grade
-
-def extract_seat_number(text):
-    seat_number_pattern = r'좌 석 번 호\s*_\s*(.*)'
+def extract_seat_number_park(text):
+    # Extracts the seat number
+    seat_number_pattern = r'좌석번호\s*([\dA-Za-z]+)'
     match = re.search(seat_number_pattern, text)
+    return match.group(1) if match else ""
 
-    if not match:
-        return ""
-
-    seat_number = match.group(1).replace(' ', '')
-    return seat_number
-
-def extract_line_after_at(text):
-    at_pattern = r'@.*'
+def extract_line_after_at_park(text):
+    # Extracts the line after '@'
+    at_pattern = r'@\s*(.*)'
     match = re.search(at_pattern, text)
-
-    if not match:
-        return ""
-
-    line_without_symbols = match.group(0)[1:].replace(' ', '').rstrip('>')
-    return line_without_symbols
+    return match.group(1).strip() if match else ""
 
 def process_yes24_data(extracted_text):
     try:
