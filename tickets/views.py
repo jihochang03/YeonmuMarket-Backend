@@ -662,24 +662,27 @@ def extract_line_after_at_link(text):
     
 def extract_line_with_yeol_and_beon(text):
     # '열'과 '번'이 포함된 줄 추출
-    pattern = r'([가-힣]+열\s*\d+번)'
+    pattern = r'좌석정보[^\n]*\n([^\n]*)'
     match = re.search(pattern, text)
 
     if not match:
         return ""
 
-    return match.group(1).strip() 
+    next_line = match.group(1).strip()  # '좌석정보' 다음 줄의 텍스트 추출
+    return next_line 
 
 def extract_discount_info_link(text):
-    # '할인' 관련 정보 추출
-    pattern = r'결제정보\s*(\d{1,3}(,\d{3})*)\s*원'
+    
+    # 할인 관련 정보 추출 패턴
+    pattern = r'([가-힣]*할인)\s*([\d,]+)\s*원'
     match = re.search(pattern, text)
 
     if not match:
         return ""
 
-    discount_info = match.group(1).replace(",", "")
-    return discount_info
+    discount_name = match.group(1).strip()  # 할인 종류 (예: '1차조기예매할인')
+    discount_amount = match.group(2).replace(",", "")  # 금액 (숫자만 남김)
+    return f"{discount_name} {discount_amount}원"
 
 def process_interpark_data(extracted_text):
     try:
