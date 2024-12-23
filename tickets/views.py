@@ -431,12 +431,10 @@ def process_image(request):
 
 def process_link_data(extracted_text):
     try:
-        reservation_status = check_reservation_status(extracted_text)
+        reservation_status = check_reservation_status_link(extracted_text)
         date_info = extract_viewing_info_link(extracted_text)
-        ticket_number = extract_ticket_number_link(extracted_text)
-        # cast_info = extract_cast(extracted_text)
-        total_amount = extract_total_amount(extracted_text)
-        price_grade = extract_discount_info(extracted_text)
+        total_amount = extract_total_amount_link(extracted_text)
+        price_grade = extract_discount_info_link(extracted_text)
         seat_number = extract_line_with_yeol_and_beon(extracted_text)
         place = extract_line_after_at_link(extracted_text)
 
@@ -445,8 +443,6 @@ def process_link_data(extracted_text):
             "status": "success",
             "reservation_status": reservation_status,
             "date_info": date_info,
-            "ticket_number": ticket_number,
-            # "cast_info": cast_info,
             "total_amount": total_amount,
             "price_grade": price_grade,
             "seat_number": seat_number,
@@ -455,87 +451,83 @@ def process_link_data(extracted_text):
     except ValueError as e:
         return {"status": "error", "message": str(e)}
     
-def extract_line_with_yeol_and_beon(text):
-    # 텍스트를 줄 단위로 분리
-    lines = text.splitlines()
-
-    # '열'과 '번'이 동시에 있는 줄 찾기
-    for line in lines:
-        if '열' in line and '번' in line:
-            # 공백을 제거하고 반환
-            return line.replace(' ', '')
-
-    return ""  # 정보를 찾지 못했을 때 빈 문자열 반환    
-
-def extract_line_after_at_link(text):
-    # '장 소' 이후의 모든 글자를 추출하는 정규식
-    pattern = r'장 소\s*(.*)'
+def check_reservation_status_link(text):
+    # '예매상태'와 그 옆의 텍스트 추출
+    pattern = r'예매상태\s*(.*)'
     match = re.search(pattern, text)
 
     if not match:
         return ""
 
-    # '장 소' 뒤의 내용을 공백 없이 추출
-    location_info = match.group(1).replace(' ', '')
-
-    return location_info
-
-def extract_ticket_number_link(text):
-    ticket_number_pattern = r'예 매 번 호\s*([A-Za-z0-9]+)'
-    match = re.search(ticket_number_pattern, text)
-
-    if not match:
-        return ""
-
-    ticket_number = match.group(1)[-10:]
-    result = f"{ticket_number}"
-    return result
+    reservation_status = match.group(1).strip()
+    return reservation_status
 
 def extract_viewing_info_link(text):
-    # '관 람 일 시' 부분에서 날짜와 시간 추출 (YYYY.MM.DD (요일) HH:MM 형식)
-    date_time_pattern = r'관 람 일 시\s*(\d{4})\.(\d{2})\.(\d{2})\(\s*(\w{1})\s*\)\s*(\d{2}):(\d{2})'
-    match = re.search(date_time_pattern, text)
+    # '관람일시'에서 날짜 및 시간 추출
+    pattern = r'관람일시\s*(\d{4})\.(\d{2})\.(\d{2})\(\s*([\w가-힣]{1,3})\s*\)\s*(\d{2}):(\d{2})'
+    match = re.search(pattern, text)
 
     if not match:
         return "관람 일시 정보를 찾을 수 없습니다."
 
-    # 추출된 값을 변수에 저장
     year, month, day, day_of_week, hour, minute = match.groups()
 
-    # 결과를 딕셔너리로 반환
-    result = {
+    # 딕셔너리 형태로 반환
+    return {
         '관람년도': year,
         '관람월': month,
         '관람일': day,
-        '관람시간': {
-            '시': hour,
-            '분': minute
-        }
+        '요일': day_of_week,
+        '시간': f"{hour}:{minute}"
     }
 
-    return result
+def extract_total_amount_link(text):
+    # '총결제금액' 옆의 금액 추출
+    pattern = r'총결제금액\s*(\d{1,3}(,\d{3})*)\s*원'
+    match = re.search(pattern, text)
 
-def extract_discount_info(text):
-    # 텍스트를 줄 단위로 분리
-    lines = text.splitlines()
+    if not match:
+        return ""
 
-    # '결 제 정 보'가 나오는 줄의 인덱스 찾기
-    for i, line in enumerate(lines):
-        if '결 제 정 보' in line:
-            # '결 제 정 보' 이전의 가장 가까운 줄에서 가격을 찾음
-            for j in range(i-1, -1, -1):  # 위쪽 줄들을 탐색
-                # 가격(숫자, 천 단위 콤마, '원')이 포함된 줄 찾기
-                match = re.search(r'(\d{1,3}(,\d{3})*)\s*원', lines[j])
-                if match:
-                    # 금액 전의 글자들을 공백 없이 추출
-                    discount_info = lines[j][:match.start()].replace(' ', '')
-                    return discount_info
+    return match.group(1).replace(",", "")  # 숫자만 반환
 
-    return ""  # 정보를 찾지 못했을 때 빈 문자열 반환
+def extract_line_after_at_link(text):
+    # '장소' 이후의 모든 텍스트 추출
+    pattern = r'장소\s*(.*)'
+    match = re.search(pattern, text)
+
+    if not match:
+        return ""
+
+    # '장소' 뒤의 내용을 공백 없이 추출
+    location_info = match.group(1).strip()
+
+    return location_info
+    
+def extract_line_with_yeol_and_beon(text):
+    # '열'과 '번'이 포함된 줄 추출
+    pattern = r'([가-힣]+열\s*\d+번)'
+    match = re.search(pattern, text)
+
+    if not match:
+        return ""
+
+    return match.group(1).strip() 
+
+def extract_discount_info_link(text):
+    # '할인' 관련 정보 추출
+    pattern = r'결제정보\s*(\d{1,3}(,\d{3})*)\s*원'
+    match = re.search(pattern, text)
+
+    if not match:
+        return ""
+
+    discount_info = match.group(1).replace(",", "")
+    return discount_info
 
 def process_interpark_data(extracted_text):
     try:
-        reservation_status = check_reservation_status(extracted_text)
+        reservation_status = check_reservation_status_link(extracted_text)
         date_info = extract_viewing_info(extracted_text)
         ticket_number = extract_ticket_number(extracted_text)
         cast_info = extract_cast(extracted_text)
@@ -559,21 +551,7 @@ def process_interpark_data(extracted_text):
     except ValueError as e:
         return JsonResponse({"status": "error", "message": str(e)})
 # 아래는 예매 정보 추출을 위한 함수들 (기존 코드)
-def check_reservation_status(text):
-    status_pattern = r'예 매 상 태\s*(.*)'
-    match = re.search(status_pattern, text)
-    
-    # if not match:
-    #     raise ValueError("예매 상태 정보를 찾을 수 없습니다.")
-    if not match:
-        return ""
-    
-    reservation_status = match.group(1).strip()
-    
-    # if reservation_status != "예 매 완 료":
-    #     raise ValueError(f"오류: 예매 상태가 '예 매 완 료'가 아닙니다. 현재 상태: {reservation_status}")
-    
-    return reservation_status
+
 
 def extract_viewing_info(text):
     date_time_pattern = r'관 람 일 시\s*(\d{4})\.(\d{2})\.(\d{2})\(\s*(\w{1})\s*\)\s*(\d{2}):(\d{2})'
