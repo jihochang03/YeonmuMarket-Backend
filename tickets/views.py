@@ -732,10 +732,7 @@ def extract_viewing_info_park(text):
         '관람월': month,
         '관람일': day,
         '관람요일': day_of_week,
-        '관람시간': {
-            '시': hour,
-            '분': minute
-        }
+        '시간': f"{hour}:{minute}"
     }
 
 def extract_ticket_number_park(text):
@@ -746,7 +743,7 @@ def extract_ticket_number_park(text):
 
 def extract_cast_park(text):
     # Extracts main cast information from the text
-    cast_pattern = r'주요출연진\s*(.*?)\s*수령방법'
+    cast_pattern = r'출연진\s*(.*?)\s*수령'
     match = re.search(cast_pattern, text, re.DOTALL)
     if not match:
         return []
@@ -760,15 +757,15 @@ def extract_cast_park(text):
 
 def extract_total_amount_park(text):
     # Extracts the total payment amount
-    amount_pattern = r'총결제금액\s*([\d,]+)\s*원'
+    amount_pattern = r'결제금액\s*([\d,]+)\s*원'
     match = re.search(amount_pattern, text)
     return match.group(1) if match else ""
 
 def extract_price_grade_park(text):
-    # Extracts the price grade
-    price_grade_pattern = r'가격등급\s*(.*?)\s*\('
+    # Extracts all text after "가격등급" until the end of the line
+    price_grade_pattern = r'가격등급\s*(.*)'
     match = re.search(price_grade_pattern, text)
-    return match.group(1).replace(' ', '') if match else ""
+    return match.group(1).strip() if match else ""
 
 def extract_seat_number_park(text):
     # Extracts the seat number
@@ -787,7 +784,6 @@ def process_yes24_data(extracted_text):
         # 예스24 관련 예매 상태 및 필요한 정보 추출 처리
         #reservation_status = check_reservation_status_yes24(extracted_text)
         date_info = extract_viewing_info_yes24(extracted_text)
-        ticket_number = extract_ticket_number_yes24(extracted_text)
         total_amount = extract_total_amount_yes24(extracted_text)
         price_grade = extract_price_grade_yes24(extracted_text)
         seat_number = extract_seat_number_yes24(extracted_text)
@@ -832,29 +828,14 @@ def extract_viewing_info_yes24(text):
         '관람년도': year,
         '관람월': month,
         '관람일': day,
-        '관람시간': {
-            '시': hour,
-            '분': minute
-        }
+        '시간': f"{hour}:{minute}"
     }
 
     return result
 
-# 예스24 관련 예매 번호 추출 함수
-def extract_ticket_number_yes24(text):
-    ticket_number_pattern = r'예 매 번 호\s*([A-Za-z0-9]+)'
-    match = re.search(ticket_number_pattern, text)
-
-    if not match:
-        return ""
-
-    ticket_number = match.group(1)[-10:]
-    result = f"Y{ticket_number}"
-    return result
-
 # 예스24 관련 총 결제 금액 추출 함수
 def extract_total_amount_yes24(text):
-    amount_pattern = r'총 결 제 금 액.*?(\d{1,3}(,\d{3})*)\s*원'
+    amount_pattern = r'결 제 금 액.*?(\d{1,3}(,\d{3})*)\s*원'
     match = re.search(amount_pattern, text)
 
     if not match:
