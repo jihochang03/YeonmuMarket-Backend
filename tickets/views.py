@@ -104,7 +104,7 @@ def process_and_mask_image(image):
         np_image = np.array(image)
             
         gray_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2GRAY)
-        _, binary_image = cv2.threshold(gray_image, 128, 255, cv2.THRESH_BINARY)
+        binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         denoised_image = cv2.medianBlur(binary_image, 3)
 
         # OCR로 텍스트 추출
@@ -658,10 +658,10 @@ def process_image(request):
             image = np.array(image)
             
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            _, binary_image = cv2.threshold(gray_image, 128, 255, cv2.THRESH_BINARY)
+            binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
             denoised_image = cv2.medianBlur(binary_image, 3)
 
-            extracted_text = pytesseract.image_to_string(denoised_image, output_type=pytesseract.Output.DICT, lang="kor")
+            extracted_text = pytesseract.image_to_string(denoised_image, lang="kor+eng")
             logger.debug(f"Raw extracted text: {extracted_text}")
 
         except Exception as e:
