@@ -47,8 +47,51 @@ import cv2
 import numpy as np
 from django.core.files import File
 import pytesseract
+import boto3
+from botocore.exceptions import ClientError
+from django.http import HttpResponse, Http404
+from django.conf import settings
+
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
+# S3 설정
+AWS_ACCESS_KEY_ID = settings.AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY = settings.AWS_SECRET_ACCESS_KEY
+AWS_STORAGE_BUCKET_NAME = "yeonmubucket"
+AWS_REGION = "ap-northeast-2"  # S3 버킷의 리전
+
+@api_view(["GET"])
+def download_image(request, file_key):
+    """
+    S3에서 파일 다운로드하여 반환하는 API
+    """
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name="ap-northeast-2",
+    )
+
+    try:
+        # S3에서 파일 가져오기
+        response = s3_client.get_object(
+            Bucket="yeonmubucket",  # S3 버킷 이름
+            Key=file_key,  # S3 파일 경로
+        )
+        file_content = response["Body"].read()
+        content_type = response["ContentType"]
+
+        # HTTP 응답 생성
+        response = HttpResponse(file_content, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{file_key.split("/")[-1]}"'
+        return response
+
+    except ClientError as e:
+        # S3에서 파일을 찾을 수 없는 경우
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            raise Http404("The requested file does not exist.")
+        return Response({"error": "Failed to retrieve the file from S3."}, status=500)
 
 class TicketView(APIView):
     @swagger_auto_schema(
@@ -501,13 +544,14 @@ class TicketPostDetailView(APIView):
         except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # 작성자가 아닌 경우 권한 없음
         if request.user != ticket_post.author:
             return Response(
                 {"detail": "You are not authorized to edit this post."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Update fields dynamically
+        # 일반 텍스트 필드들만 업데이트
         update_fields = [
             "title",
             "date",
@@ -523,30 +567,94 @@ class TicketPostDetailView(APIView):
             if value is not None:
                 setattr(ticket, field, value)
 
-        # Handle file uploads (save to storage and update URL fields)
-        if uploaded_file := request.FILES.get("uploaded_file"):
-            reserv_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_file.name}", uploaded_file)
-            ticket.uploaded_file_url = default_storage.url(reserv_path)
+        # ─────────────────────────────────────────────────────
+        # 1) 새 파일이 올라온 경우에만, 생성시와 동일한 로직 수행
+        #    - reservImage(= uploaded_file) / seatImage(= uploaded_seat_image)
+        # ─────────────────────────────────────────────────────
 
-        if uploaded_seat_image := request.FILES.get("uploaded_seat_image"):
-            seat_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_seat_image.name}", uploaded_seat_image)
-            ticket.uploaded_seat_image_url = default_storage.url(seat_path)
+        if "uploaded_file" in request.FILES:
+            uploaded_file = request.FILES["uploaded_file"]
+            try:
+                # 파일 경로 설정(중복 방지)
+                reserv_file_path = get_unique_file_path(
+                    uploaded_file, prefix=f"tickets/{ticket.id}"
+                )
+                # 실제 파일 저장
+                reserv_path = default_storage.save(reserv_file_path, uploaded_file)
+                # DB 필드에 URL 저장
+                ticket.uploaded_file_url = default_storage.url(reserv_path)
 
+                # masking, OCR 등 작업
+                uploaded_file.seek(0)  # 파일 포인터를 맨 앞으로
+                image = Image.open(BytesIO(uploaded_file.read()))
+                logger.debug("Image loaded successfully for OCR (reservImage)")
+                masked_image = process_and_mask_image(image)
+
+                if masked_image:
+                    masked_name = f"ticket_{ticket.id}_masked.jpg"
+                    relative_path = f"tickets/{ticket.id}/{masked_name}"
+                    masked_url = default_storage.save(relative_path, File(masked_image))
+                    logger.debug(f"masked_url: {masked_url}")
+                    ticket.masked_file_url = (
+                        f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/"
+                        f"tickets/{ticket.id}/{masked_name}"
+                    )
+            except Exception as e:
+                logger.exception("masked_File failed")
+                return Response(
+                    {"status": "error", "message": "reservImage masking/processing failed"},
+                    status=500,
+                )
+
+        if "uploaded_seat_image" in request.FILES:
+            uploaded_seat_image = request.FILES["uploaded_seat_image"]
+            try:
+                # 파일 경로 설정(중복 방지)
+                seat_file_path = get_unique_file_path(
+                    uploaded_seat_image, prefix=f"tickets/{ticket.id}"
+                )
+                # 실제 파일 저장
+                seat_path = default_storage.save(seat_file_path, uploaded_seat_image)
+                # DB 필드에 URL 저장
+                ticket.uploaded_seat_image_url = default_storage.url(seat_path)
+
+                # masking, OCR 등 작업
+                uploaded_seat_image.seek(0)  # 파일 포인터를 맨 앞으로
+                image = Image.open(uploaded_seat_image)
+                logger.debug("Image loaded successfully for OCR (seatImage)")
+                # process_seat_image 함수에 booking_page 같은 정보가 필요하다면 ticket.booking_page를 인자로
+                masked_seat_image = process_seat_image(image, ticket.booking_page)
+
+                if masked_seat_image:
+                    masked_seat_name = f"ticket_{ticket.id}_processed.jpg"
+                    relative_path = f"tickets/{ticket.id}/{masked_seat_name}"
+                    masked_url = default_storage.save(relative_path, File(masked_seat_image))
+                    logger.debug(f"masked_url: {masked_url}")
+                    ticket.processed_seat_image_url = (
+                        f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/"
+                        f"tickets/{ticket.id}/{masked_seat_name}"
+                    )
+            except Exception as e:
+                logger.exception("masked_File failed")
+                return Response(
+                    {"status": "error", "message": "seatImage masking/processing failed"},
+                    status=500,
+                )
+
+        # DB에 최종 저장
         try:
             ticket.save()
             ticket_post.save()
-
-            serializer = TicketPostSerializer(ticket_post, context={"request": request})
-            response_data = serializer.data
-            response_data["masked_seat_image_url"] = ticket.processed_seat_image_url
-
-            return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
                 {"detail": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        serializer = TicketPostSerializer(ticket_post, context={"request": request})
+        response_data = serializer.data
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 class TransferListView(APIView):
     @swagger_auto_schema(
         operation_id="양도 티켓 목록 조회",
@@ -1022,51 +1130,38 @@ ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 @csrf_exempt
 def post_tweet(request):
-    permission_classes = [AllowAny]
     """
     Post a tweet with an optional image using TwitterAPI.
     """
-    import json
-    from io import BytesIO
-
-    # 요청 데이터 읽기
-    body = json.loads(request.body)
-    tweet_content = body.get("tweetContent")  # 트윗 내용
-    #image_path = body.get("imagePath")  # 이미지 경로 (Optional)
-
-    if not tweet_content:
-        return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
-
-    # TwitterAPI 초기화
-    api = TwitterAPI(
-        CONSUMER_KEY,
-        CONSUMER_SECRET,
-        ACCESS_TOKEN,
-        ACCESS_TOKEN_SECRET
-    )
-
     try:
-        # media_id = None
-        # if image_path:  # 이미지가 제공된 경우
-        #     with open(image_path, "rb") as f:
-        #         data = f.read()
-        #         response = api.request("media/upload", {"media_type": "image/jpeg"}, {"media": data})
-        #         if response.status_code != 200:
-        #             return JsonResponse(
-        #                 {"message": "이미지 업로드 중 오류가 발생했습니다.", "error": response.json()},
-        #                 status=response.status_code,
-        #             )
-        #         media_id = response.json().get("media_id_string")
+        # 인증 정보 유효성 검사
+        if not all([CONSUMER_KEY, CONSUMER_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET]):
+            raise Exception("Missing Twitter API authentication parameters")
 
+        # 요청 데이터 읽기
+        body = json.loads(request.body)
+        tweet_content = body.get("tweetContent")  # 트윗 내용
+        #image_path = body.get("imagePath")  # 이미지 경로 (Optional)
+
+        if not tweet_content:
+            return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
+
+        # TwitterAPI 초기화
+        api = TwitterAPI(
+            CONSUMER_KEY,
+            CONSUMER_SECRET,
+            ACCESS_TOKEN,
+            ACCESS_TOKEN_SECRET
+        )
+
+        
         # 트윗 작성
         params = {"status": tweet_content}
-        # if media_id:
-        #     params["media_ids"] = media_id
 
         response = api.request("statuses/update", params)
         if response.status_code not in [200, 201]:
             return JsonResponse(
-                {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
+                {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.text},
                 status=response.status_code,
             )
 
@@ -1074,6 +1169,8 @@ def post_tweet(request):
             {"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()}
         )
 
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "JSON 형식이 잘못되었습니다."}, status=400)
     except Exception as e:
         return JsonResponse({"message": "알 수 없는 오류가 발생했습니다.", "error": str(e)}, status=500)
 # def post_tweet(request):
