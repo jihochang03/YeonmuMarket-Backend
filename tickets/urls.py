@@ -19,7 +19,7 @@ urlpatterns = [
     path('purchased/', ReceivedListView.as_view(), name='received-tickets'),
     path('process_image/', process_image, name='process_image'),
     path('post-tweet/', post_tweet, name='post_tweet'),
-    path("download/<str:file_key>/", download_image, name="download_image"),
+    path("download/<path:file_key>/", download_image, name="download_image"),
 ]
 # MEDIA_URL로 시작하는 요청을 MEDIA_ROOT에서 찾아 서빙
 if settings.DEBUG:  # 개발 환경에서만 활성화
