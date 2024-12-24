@@ -1130,51 +1130,38 @@ ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 @csrf_exempt
 def post_tweet(request):
-    permission_classes = [AllowAny]
     """
     Post a tweet with an optional image using TwitterAPI.
     """
-    import json
-    from io import BytesIO
-
-    # 요청 데이터 읽기
-    body = json.loads(request.body)
-    tweet_content = body.get("tweetContent")  # 트윗 내용
-    #image_path = body.get("imagePath")  # 이미지 경로 (Optional)
-
-    if not tweet_content:
-        return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
-
-    # TwitterAPI 초기화
-    api = TwitterAPI(
-        CONSUMER_KEY,
-        CONSUMER_SECRET,
-        ACCESS_TOKEN,
-        ACCESS_TOKEN_SECRET
-    )
-
     try:
-        # media_id = None
-        # if image_path:  # 이미지가 제공된 경우
-        #     with open(image_path, "rb") as f:
-        #         data = f.read()
-        #         response = api.request("media/upload", {"media_type": "image/jpeg"}, {"media": data})
-        #         if response.status_code != 200:
-        #             return JsonResponse(
-        #                 {"message": "이미지 업로드 중 오류가 발생했습니다.", "error": response.json()},
-        #                 status=response.status_code,
-        #             )
-        #         media_id = response.json().get("media_id_string")
+        # 인증 정보 유효성 검사
+        if not all([CONSUMER_KEY, CONSUMER_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET]):
+            raise Exception("Missing Twitter API authentication parameters")
 
+        # 요청 데이터 읽기
+        body = json.loads(request.body)
+        tweet_content = body.get("tweetContent")  # 트윗 내용
+        #image_path = body.get("imagePath")  # 이미지 경로 (Optional)
+
+        if not tweet_content:
+            return JsonResponse({"message": "트윗 내용이 비어 있습니다."}, status=400)
+
+        # TwitterAPI 초기화
+        api = TwitterAPI(
+            CONSUMER_KEY,
+            CONSUMER_SECRET,
+            ACCESS_TOKEN,
+            ACCESS_TOKEN_SECRET
+        )
+
+        
         # 트윗 작성
         params = {"status": tweet_content}
-        # if media_id:
-        #     params["media_ids"] = media_id
 
         response = api.request("statuses/update", params)
         if response.status_code not in [200, 201]:
             return JsonResponse(
-                {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.json()},
+                {"message": "트윗 게시 중 오류가 발생했습니다.", "error": response.text},
                 status=response.status_code,
             )
 
@@ -1182,6 +1169,8 @@ def post_tweet(request):
             {"message": "트윗이 성공적으로 게시되었습니다.", "tweet": response.json()}
         )
 
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "JSON 형식이 잘못되었습니다."}, status=400)
     except Exception as e:
         return JsonResponse({"message": "알 수 없는 오류가 발생했습니다.", "error": str(e)}, status=500)
 # def post_tweet(request):
