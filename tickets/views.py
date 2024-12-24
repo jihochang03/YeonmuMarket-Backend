@@ -47,8 +47,51 @@ import cv2
 import numpy as np
 from django.core.files import File
 import pytesseract
+import boto3
+from botocore.exceptions import ClientError
+from django.http import HttpResponse, Http404
+from django.conf import settings
+
 
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
+# S3 설정
+AWS_ACCESS_KEY_ID = settings.AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY = settings.AWS_SECRET_ACCESS_KEY
+AWS_STORAGE_BUCKET_NAME = "yeonmubucket"
+AWS_REGION = "ap-southeast-2"  # S3 버킷의 리전
+
+@api_view(["GET"])
+def download_masked_seat_image(request, file_key):
+    """
+    S3에서 파일 다운로드하여 반환하는 API
+    """
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name="ap-southeast-2",
+    )
+
+    try:
+        # S3에서 파일 가져오기
+        response = s3_client.get_object(
+            Bucket="yeonmubucket",  # S3 버킷 이름
+            Key=file_key,  # S3 파일 경로
+        )
+        file_content = response["Body"].read()
+        content_type = response["ContentType"]
+
+        # HTTP 응답 생성
+        response = HttpResponse(file_content, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{file_key.split("/")[-1]}"'
+        return response
+
+    except ClientError as e:
+        # S3에서 파일을 찾을 수 없는 경우
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            raise Http404("The requested file does not exist.")
+        return Response({"error": "Failed to retrieve the file from S3."}, status=500)
 
 class TicketView(APIView):
     @swagger_auto_schema(
