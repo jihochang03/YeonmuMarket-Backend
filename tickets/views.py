@@ -59,10 +59,10 @@ pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 AWS_ACCESS_KEY_ID = settings.AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY = settings.AWS_SECRET_ACCESS_KEY
 AWS_STORAGE_BUCKET_NAME = "yeonmubucket"
-AWS_REGION = "ap-southeast-2"  # S3 버킷의 리전
+AWS_REGION = "ap-northeast-2"  # S3 버킷의 리전
 
 @api_view(["GET"])
-def download_masked_seat_image(request, file_key):
+def download_image(request, file_key):
     """
     S3에서 파일 다운로드하여 반환하는 API
     """
@@ -70,7 +70,7 @@ def download_masked_seat_image(request, file_key):
         "s3",
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name="ap-southeast-2",
+        region_name="ap-northeast-2",
     )
 
     try:
