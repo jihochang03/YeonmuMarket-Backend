@@ -501,13 +501,14 @@ class TicketPostDetailView(APIView):
         except TicketPost.DoesNotExist:
             return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # 작성자가 아닌 경우 권한 없음
         if request.user != ticket_post.author:
             return Response(
                 {"detail": "You are not authorized to edit this post."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Update fields dynamically
+        # 일반 텍스트 필드들만 업데이트
         update_fields = [
             "title",
             "date",
@@ -523,30 +524,94 @@ class TicketPostDetailView(APIView):
             if value is not None:
                 setattr(ticket, field, value)
 
-        # Handle file uploads (save to storage and update URL fields)
-        if uploaded_file := request.FILES.get("uploaded_file"):
-            reserv_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_file.name}", uploaded_file)
-            ticket.uploaded_file_url = default_storage.url(reserv_path)
+        # ─────────────────────────────────────────────────────
+        # 1) 새 파일이 올라온 경우에만, 생성시와 동일한 로직 수행
+        #    - reservImage(= uploaded_file) / seatImage(= uploaded_seat_image)
+        # ─────────────────────────────────────────────────────
 
-        if uploaded_seat_image := request.FILES.get("uploaded_seat_image"):
-            seat_path = default_storage.save(f"tickets/{ticket.id}/{uploaded_seat_image.name}", uploaded_seat_image)
-            ticket.uploaded_seat_image_url = default_storage.url(seat_path)
+        if "uploaded_file" in request.FILES:
+            uploaded_file = request.FILES["uploaded_file"]
+            try:
+                # 파일 경로 설정(중복 방지)
+                reserv_file_path = get_unique_file_path(
+                    uploaded_file, prefix=f"tickets/{ticket.id}"
+                )
+                # 실제 파일 저장
+                reserv_path = default_storage.save(reserv_file_path, uploaded_file)
+                # DB 필드에 URL 저장
+                ticket.uploaded_file_url = default_storage.url(reserv_path)
 
+                # masking, OCR 등 작업
+                uploaded_file.seek(0)  # 파일 포인터를 맨 앞으로
+                image = Image.open(BytesIO(uploaded_file.read()))
+                logger.debug("Image loaded successfully for OCR (reservImage)")
+                masked_image = process_and_mask_image(image)
+
+                if masked_image:
+                    masked_name = f"ticket_{ticket.id}_masked.jpg"
+                    relative_path = f"tickets/{ticket.id}/{masked_name}"
+                    masked_url = default_storage.save(relative_path, File(masked_image))
+                    logger.debug(f"masked_url: {masked_url}")
+                    ticket.masked_file_url = (
+                        f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/"
+                        f"tickets/{ticket.id}/{masked_name}"
+                    )
+            except Exception as e:
+                logger.exception("masked_File failed")
+                return Response(
+                    {"status": "error", "message": "reservImage masking/processing failed"},
+                    status=500,
+                )
+
+        if "uploaded_seat_image" in request.FILES:
+            uploaded_seat_image = request.FILES["uploaded_seat_image"]
+            try:
+                # 파일 경로 설정(중복 방지)
+                seat_file_path = get_unique_file_path(
+                    uploaded_seat_image, prefix=f"tickets/{ticket.id}"
+                )
+                # 실제 파일 저장
+                seat_path = default_storage.save(seat_file_path, uploaded_seat_image)
+                # DB 필드에 URL 저장
+                ticket.uploaded_seat_image_url = default_storage.url(seat_path)
+
+                # masking, OCR 등 작업
+                uploaded_seat_image.seek(0)  # 파일 포인터를 맨 앞으로
+                image = Image.open(uploaded_seat_image)
+                logger.debug("Image loaded successfully for OCR (seatImage)")
+                # process_seat_image 함수에 booking_page 같은 정보가 필요하다면 ticket.booking_page를 인자로
+                masked_seat_image = process_seat_image(image, ticket.booking_page)
+
+                if masked_seat_image:
+                    masked_seat_name = f"ticket_{ticket.id}_processed.jpg"
+                    relative_path = f"tickets/{ticket.id}/{masked_seat_name}"
+                    masked_url = default_storage.save(relative_path, File(masked_seat_image))
+                    logger.debug(f"masked_url: {masked_url}")
+                    ticket.processed_seat_image_url = (
+                        f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/"
+                        f"tickets/{ticket.id}/{masked_seat_name}"
+                    )
+            except Exception as e:
+                logger.exception("masked_File failed")
+                return Response(
+                    {"status": "error", "message": "seatImage masking/processing failed"},
+                    status=500,
+                )
+
+        # DB에 최종 저장
         try:
             ticket.save()
             ticket_post.save()
-
-            serializer = TicketPostSerializer(ticket_post, context={"request": request})
-            response_data = serializer.data
-            response_data["masked_seat_image_url"] = ticket.processed_seat_image_url
-
-            return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
                 {"detail": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        serializer = TicketPostSerializer(ticket_post, context={"request": request})
+        response_data = serializer.data
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 class TransferListView(APIView):
     @swagger_auto_schema(
         operation_id="양도 티켓 목록 조회",
