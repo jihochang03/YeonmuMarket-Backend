@@ -369,9 +369,6 @@ def draw_bounding_box_colors_cv(cv_image, width_scale=4):
         logger.exception("Error in draw_bounding_box_colors_cv")
         return None
 
-
-
-
 class TicketPostListView(APIView):
     def post(self, request):
         user = request.user
@@ -396,7 +393,9 @@ class TicketPostListView(APIView):
         casting = request.data.get("casting")
         phone_last_digits = request.data.get("phone_last_digits")
         uploaded_file = request.FILES["reservImage"]
-        uploaded_seat_image = request.FILES["seatImage"]
+        uploaded_seat_image = request.FILES["maskedSeatImage"]
+        uploaded_masked_file =request.FILES["maskedReservImage"]
+        uploaded_masked_seat_file =request.FILES["maskedSeatImage"]
 
         try:
             # Ticket 객체 생성
@@ -414,49 +413,54 @@ class TicketPostListView(APIView):
 
             reserv_file_path = get_unique_file_path(uploaded_file, prefix=f"tickets/{ticket.id}")
             seat_file_path = get_unique_file_path(uploaded_seat_image, prefix=f"tickets/{ticket.id}")
-
+            masked_reserv_file_path = get_unique_file_path(uploaded_masked_file, prefix=f"tickets/{ticket.id}")
+            masked_seat_file_path= get_unique_file_path(uploaded_masked_seat_file, prefix=f"tickets/{ticket.id}")
             # 3) default_storage에 실제 저장
             reserv_path = default_storage.save(reserv_file_path, uploaded_file)
             seat_path = default_storage.save(seat_file_path, uploaded_seat_image)
+            masked_reserv_path = default_storage.save(masked_reserv_file_path, uploaded_masked_file)
+            masked_seat_path = default_storage.save(masked_seat_file_path, uploaded_masked_seat_file)
 
             # 4) DB 필드에 URL 저장
             ticket.uploaded_file_url = default_storage.url(reserv_path)
             ticket.uploaded_seat_image_url = default_storage.url(seat_path)
+            ticket.masked_file_url = default_storage.url(masked_reserv_path)
+            ticket.processed_seat_image_url = default_storage.url(masked_seat_path)
         
-            try:
-                uploaded_file.seek(0)  # Ensure file pointer is at the beginning
+            # try:
+            #     uploaded_file.seek(0)  # Ensure file pointer is at the beginning
 
-                image = Image.open(BytesIO(uploaded_file.read()))
-                logger.debug("Image loaded successfully for OCR")
-                masked_image =process_and_mask_image(image)
+            #     image = Image.open(BytesIO(uploaded_file.read()))
+            #     logger.debug("Image loaded successfully for OCR")
+            #     masked_image =process_and_mask_image(image)
                 
-                if masked_image:
-                    masked_name = f"ticket_{ticket.id}_masked.jpg"
-                    relative_path = f"tickets/{ticket.id}/{masked_name}"  # 상대 경로
-                    masked_url = default_storage.save(relative_path, File(masked_image))
-                    logger.debug(f"masked_url:{masked_url}")
-                    ticket.masked_file_url = f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}"
-            except Exception as e:
-                logger.exception("masked_File failed")
-                return Response({"status": "error", "message": "masked_File failed"}, status=500)
+            #     if masked_image:
+            #         masked_name = f"ticket_{ticket.id}_masked.jpg"
+            #         relative_path = f"tickets/{ticket.id}/{masked_name}"  # 상대 경로
+            #         masked_url = default_storage.save(relative_path, File(masked_image))
+            #         logger.debug(f"masked_url:{masked_url}")
+            #         ticket.masked_file_url = f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_name}"
+            # except Exception as e:
+            #     logger.exception("masked_File failed")
+            #     return Response({"status": "error", "message": "masked_File failed"}, status=500)
             
-            try:
-                uploaded_seat_image.seek(0)  # Ensure file pointer is at the beginning
+            # try:
+            #     uploaded_seat_image.seek(0)  # Ensure file pointer is at the beginning
 
-                image = Image.open(uploaded_seat_image)
-                logger.debug("Image loaded successfully for OCR")
-                masked_seat_image =process_seat_image(image,ticket.booking_page)
+            #     image = Image.open(uploaded_seat_image)
+            #     logger.debug("Image loaded successfully for OCR")
+            #     masked_seat_image =process_seat_image(image,ticket.booking_page)
                 
-                if masked_seat_image:
-                    masked_seat_name = f"ticket_{ticket.id}_processed.jpg"
-                    relative_path = f"tickets/{ticket.id}/{masked_seat_name}"  # 상대 경로
-                    masked_url = default_storage.save(relative_path, File(masked_seat_image))
-                    logger.debug(f"masked_url:{masked_url}")
-                    ticket.processed_seat_image_url =f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_seat_name}"
+            #     if masked_seat_image:
+            #         masked_seat_name = f"ticket_{ticket.id}_processed.jpg"
+            #         relative_path = f"tickets/{ticket.id}/{masked_seat_name}"  # 상대 경로
+            #         masked_url = default_storage.save(relative_path, File(masked_seat_image))
+            #         logger.debug(f"masked_url:{masked_url}")
+            #         ticket.processed_seat_image_url =f"https://yeonmubucket.s3.ap-northeast-2.amazonaws.com/tickets/{ticket.id}/{masked_seat_name}"
 
-            except Exception as e:
-                logger.exception("masked_File failed")
-                return Response({"status": "error", "message": "masked_File failed"}, status=500)
+            # except Exception as e:
+            #     logger.exception("masked_File failed")
+            #     return Response({"status": "error", "message": "masked_File failed"}, status=500)
         
             ticket.save()
 
