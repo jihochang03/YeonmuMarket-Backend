@@ -393,7 +393,7 @@ class TicketPostListView(APIView):
         casting = request.data.get("casting")
         phone_last_digits = request.data.get("phone_last_digits")
         uploaded_file = request.FILES["reservImage"]
-        uploaded_seat_image = request.FILES["maskedSeatImage"]
+        uploaded_seat_image = request.FILES["seatImage"]
         uploaded_masked_file =request.FILES["maskedReservImage"]
         uploaded_masked_seat_file =request.FILES["maskedSeatImage"]
 
