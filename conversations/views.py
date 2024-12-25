@@ -373,7 +373,7 @@ class ConfirmReceiptView(APIView):
             return Response({
                 "detail": "Transfer completed.",
                 "ticket_file_url": ticket.uploaded_file.url,
-                "phone_last_digits": phone_last_digits
+                "phone_last_digits": ticket.phone_last_digits
             }, status=status.HTTP_200_OK)
 
         except Conversation.DoesNotExist:
