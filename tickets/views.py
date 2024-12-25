@@ -942,21 +942,16 @@ def extract_discount_info_link(text):
     # 줄 단위로 텍스트를 분리
     lines = text.splitlines()
 
-    # '좌석정보' 또는 'R418 JS 9번' 같은 줄 이후 탐색
-    for i, line in enumerate(lines):
-        if "좌석정보" in line:
-            # 좌석 정보 줄 기준으로 아래 두 번째 줄 탐색
-            if i + 2 < len(lines):  # 두 줄 아래가 존재하는지 확인
-                target_line = lines[i + 2]
-                if "할인" in target_line:
-                    # 할인 정보 패턴 추출
-                    pattern = r'([가-힣]*할인)\s*([\d,]+)\s*원'
-                    match = re.search(pattern, target_line)
-                    if match:
-                        discount_name = match.group(1).strip()  # 할인 종류
-                        return discount_name
+    # '할인'이라는 단어가 포함된 첫 번째 줄을 탐색
+    for line in lines:
+        if "할인" in line:
+            # '할인' 단어가 포함된 텍스트를 추출
+            pattern = r'([가-힣]*할인)'  # '재관람 할인' 등 '할인'까지 추출하는 패턴
+            match = re.search(pattern, line)
+            if match:
+                return match.group(1).strip()  # '재관람 할인' 등 반환
 
-    # 할인 정보가 없을 경우 빈 문자열 반환
+    # '할인' 단어가 없으면 빈 문자열 반환
     return ""
 
 def process_interpark_data(extracted_text):
