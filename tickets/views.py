@@ -946,10 +946,10 @@ def extract_discount_info_link(text):
     for line in lines:
         if "할인" in line:
             # '할인' 단어가 포함된 텍스트를 추출
-            pattern = r'([가-힣]*할인)'  # '재관람 할인' 등 '할인'까지 추출하는 패턴
+            pattern = r'([가-힣\s]*할인)'  # 한글 및 공백 포함 '재관람 할인' 등 전체 매칭
             match = re.search(pattern, line)
             if match:
-                return match.group(1).strip()  # '재관람 할인' 등 반환
+                return match.group(1).strip()  # '재관람 할인' 반환
 
     # '할인' 단어가 없으면 빈 문자열 반환
     return ""
