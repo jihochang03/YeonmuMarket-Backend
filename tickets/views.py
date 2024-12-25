@@ -928,28 +928,36 @@ def extract_line_after_at_link(text):
     return location_info
     
 def extract_line_with_yeol_and_beon_link(text):
-    # '열'과 '번'이 포함된 줄 추출
-    pattern = r'좌석정보[^\n]*\n([^\n]*)'
+    # '좌석정보' 바로 다음 줄 추출
+    pattern = r'좌석정보\s*\n([^\n]*)'  # '좌석정보' 이후의 줄을 캡처
     match = re.search(pattern, text)
 
     if not match:
-        return ""
+        return ""  # '좌석정보' 다음 줄이 없을 경우 빈 문자열 반환
 
     next_line = match.group(1).strip()  # '좌석정보' 다음 줄의 텍스트 추출
-    return next_line 
+    return next_line
 
 def extract_discount_info_link(text):
-    
-    # 할인 관련 정보 추출 패턴
-    pattern = r'([가-힣]*할인)\s*([\d,]+)\s*원'
-    match = re.search(pattern, text)
+    # 줄 단위로 텍스트를 분리
+    lines = text.splitlines()
 
-    if not match:
-        return ""
+    # '좌석정보' 또는 'R418 JS 9번' 같은 줄 이후 탐색
+    for i, line in enumerate(lines):
+        if "좌석정보" in line:
+            # 좌석 정보 줄 기준으로 아래 두 번째 줄 탐색
+            if i + 2 < len(lines):  # 두 줄 아래가 존재하는지 확인
+                target_line = lines[i + 2]
+                if "할인" in target_line:
+                    # 할인 정보 패턴 추출
+                    pattern = r'([가-힣]*할인)\s*([\d,]+)\s*원'
+                    match = re.search(pattern, target_line)
+                    if match:
+                        discount_name = match.group(1).strip()  # 할인 종류
+                        return discount_name
 
-    discount_name = match.group(1).strip()  # 할인 종류 (예: '1차조기예매할인')
-    discount_amount = match.group(2).replace(",", "")  # 금액 (숫자만 남김)
-    return f"{discount_name}"
+    # 할인 정보가 없을 경우 빈 문자열 반환
+    return ""
 
 def process_interpark_data(extracted_text):
     try:
