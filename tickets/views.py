@@ -751,21 +751,25 @@ def process_image(request):
             return Response({"status": "error", "message": "Keyword is required."}, status=400)
 
         # Step 2: Validate uploaded files
-        if 'reservImage' not in request.FILES:
+        if 'reservImage' not in request.FILES or 'seatImage' not in request.FILES:
             logger.debug(f"Uploaded files: {request.FILES.keys()}")
-            return Response({"status": "error", "message": "Both files are required."}, status=400)
+            return Response({"status": "error", "message": "Both files (reservImage, seatImage) are required."}, status=400)
 
         reserv_image = request.FILES['reservImage']
+        seat_image = request.FILES['seatImage']
 
         try:
+            # -------------------------
+            # 예약표 이미지 OCR 처리
+            # -------------------------
             reserv_image.seek(0)  # Ensure file pointer is at the beginning
             logger.debug("Starting OCR processing for reservImage")
 
-            image = Image.open(BytesIO(reserv_image.read()))
-            logger.debug("Image loaded successfully for OCR")
-            image = np.array(image)
+            reservimage = Image.open(BytesIO(reserv_image.read()))
+            logger.debug("reservImage opened successfully for OCR")
+            image_arr = np.array(reservimage)
             
-            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            gray_image = cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
             binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
             denoised_image = cv2.medianBlur(binary_image, 3)
 
@@ -775,8 +779,10 @@ def process_image(request):
         except Exception as e:
             logger.exception("OCR processing failed")
             return Response({"status": "error", "message": "OCR failed."}, status=500)
-
-        #Step 5: Keyword-specific processing
+        
+        # -------------------------
+        # Step 5: Keyword-specific processing
+        # -------------------------
         try:
             if keyword == '인터파크':
                 response_data = process_interpark_data(extracted_text)
@@ -792,13 +798,54 @@ def process_image(request):
         except Exception as e:
             logger.exception("Keyword processing failed")
             return Response({"status": "error", "message": f"Keyword processing failed: {str(e)}"}, status=500)
+        
+        # -------------------------
+        # 예약표 이미지 마스킹 처리
+        # -------------------------
+        try:
+            # process_and_mask_image 함수에서 반환된 BytesIO 객체
+            masked_image = process_and_mask_image(reservimage)
+            if masked_image:
+                # base64로 인코딩
+                masked_image_base64 = base64.b64encode(masked_image.getvalue()).decode('utf-8')
+                # 프론트에서 바로 <img> src 로 쓸 수 있도록 data URL 형태로 저장
+                response_data['masked_image'] = f"data:image/jpeg;base64,{masked_image_base64}"
+            else:
+                logger.error("masked_image is None.")
 
+        except Exception as e:
+            logger.exception("masked_File failed")
+            return Response({"status": "error", "message": "masked_File failed"}, status=500)
+            
+        # -------------------------
+        # 좌석표 이미지 마스킹 처리
+        # -------------------------
+        try:
+            seat_image.seek(0)  # Ensure file pointer is at the beginning
+            seatimage_pil = Image.open(seat_image)
+            logger.debug("seatImage opened successfully for OCR")
+
+            # 예: process_seat_image에서 좌석표 이미지를 특정 방식으로 가공하고 
+            #     마스킹 된 BytesIO 객체를 리턴한다고 가정
+            masked_seat_image = process_seat_image(seatimage_pil, keyword)
+            if masked_seat_image:
+                masked_seat_image_base64 = base64.b64encode(masked_seat_image.getvalue()).decode('utf-8')
+                response_data['masked_seat_image'] = f"data:image/jpeg;base64,{masked_seat_image_base64}"
+            else:
+                logger.error("masked_seat_image is None.")
+
+        except Exception as e:
+            logger.exception("masked_File failed")
+            return Response({"status": "error", "message": "masked_File failed"}, status=500)   
+            
         # Step 6: Return response
         return Response(response_data, status=200)
 
     except Exception as e:
         logger.exception("Unexpected error during image processing")
         return Response({"status": "error", "message": f"Unexpected error: {str(e)}"}, status=500)
+
+
 
 
 def process_link_data(extracted_text):
