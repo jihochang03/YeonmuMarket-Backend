@@ -806,20 +806,7 @@ def process_image(request):
         # -------------------------
         # 예약표 이미지 마스킹 처리
         # -------------------------
-        try:
-            # process_and_mask_image 함수에서 반환된 BytesIO 객체
-            masked_image = process_and_mask_image(reservimage)
-            if masked_image:
-                # base64로 인코딩
-                masked_image_base64 = base64.b64encode(masked_image.getvalue()).decode('utf-8')
-                # 프론트에서 바로 <img> src 로 쓸 수 있도록 data URL 형태로 저장
-                response_data['masked_image'] = f"data:image/jpeg;base64,{masked_image_base64}"
-            else:
-                logger.error("masked_image is None.")
-
-        except Exception as e:
-            logger.exception("masked_File failed")
-            return Response({"status": "error", "message": "masked_File failed"}, status=500)
+        v
             
         # -------------------------
         # 좌석표 이미지 마스킹 처리
