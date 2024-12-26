@@ -190,7 +190,7 @@ def process_seat_image(image_file, booking_page):
 
         if booking_page == "티켓링크":
             logger.debug("Using no-color bounding box for 티켓링크")
-            pil_image = draw_bounding_box_no_color_cv(cv_image)
+            pil_image = draw_bounding_box_colors_cv_link(cv_image)
         elif booking_page == "예스24":
             logger.debug("Using no-color bounding box for 예스24")
             pil_image = draw_bounding_box_colors_cv_24(cv_image)
@@ -216,31 +216,31 @@ def find_nearby_text(data, x, y, w, h, target_text):
             return True
     return False
     
-def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
-    """좌석 이미지에 검정색 박스 그리기"""
-    try:
-        logger.debug("Starting draw_bounding_box_no_color_cv")
-        height, width, _ = cv_image.shape
-        gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-        _, thresh_image = cv2.threshold(gray_image, 200, 255, cv2.THRESH_BINARY_INV)
-        contours, _ = cv2.findContours(thresh_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+# def draw_bounding_box_no_color_cv(cv_image, width_scale=4):
+#     """좌석 이미지에 검정색 박스 그리기"""
+#     try:
+#         logger.debug("Starting draw_bounding_box_no_color_cv")
+#         height, width, _ = cv_image.shape
+#         gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+#         _, thresh_image = cv2.threshold(gray_image, 200, 255, cv2.THRESH_BINARY_INV)
+#         contours, _ = cv2.findContours(thresh_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_image)
-        for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
-            if w > 5 and h > 5:
-                box_x1 = max(0, x - w * (width_scale - 1) // 2)
-                box_y1 = y
-                box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
-                box_y2 = y + h
-                draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="black", fill="black", width=3)
-        logger.debug("Bounding box (no color) drawn successfully")
-        return pil_image
+#         pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+#         draw = ImageDraw.Draw(pil_image)
+#         for contour in contours:
+#             x, y, w, h = cv2.boundingRect(contour)
+#             if w > 5 and h > 5:
+#                 box_x1 = max(0, x - w * (width_scale - 1) // 2)
+#                 box_y1 = y
+#                 box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+#                 box_y2 = y + h
+#                 draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline="black", fill="black", width=3)
+#         logger.debug("Bounding box (no color) drawn successfully")
+#         return pil_image
 
-    except Exception as e:
-        logger.exception("Error in draw_bounding_box_no_color_cv")
-        return None
+#     except Exception as e:
+#         logger.exception("Error in draw_bounding_box_no_color_cv")
+#         return None
     
 def draw_bounding_box_colors_cv_24(cv_image, width_scale=4):
     try:
@@ -304,7 +304,7 @@ def draw_bounding_box_colors_cv_24(cv_image, width_scale=4):
     except Exception as e:
         logger.exception("Error in draw_bounding_box_colors_cv")
         return None
-
+    
 def draw_bounding_box_colors_cv(cv_image, width_scale=4):
     """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
     try:
@@ -324,6 +324,135 @@ def draw_bounding_box_colors_cv(cv_image, width_scale=4):
             {"color": "green", "lower": (40, 70, 50), "upper": (80, 255, 255)},
             {"color": "blue", "lower": (100, 70, 50), "upper": (130, 255, 255)},
             {"color": "orange", "lower": (10, 100, 20), "upper": (25, 255, 255)}
+        ]
+
+        # Convert OpenCV image to PIL image for drawing
+        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_image)
+
+        # Iterate over color ranges
+        for color_range in color_ranges:
+            lower = color_range["lower"]
+            upper = color_range["upper"]
+            color_name = color_range["color"]
+
+            # Create mask for the current color
+            mask = cv2.inRange(hsv_image, lower, upper)
+            logger.debug(f"Mask created for {color_name} with lower={lower}, upper={upper}")
+
+            # Find contours in the mask
+            contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            logger.debug(f"Number of {color_name} contours found: {len(contours)}")
+
+            # If contours are found, draw bounding boxes and stop checking further colors
+            if contours:
+                for i, contour in enumerate(contours):
+                    x, y, w, h = cv2.boundingRect(contour)
+                    logger.debug(f"{color_name.capitalize()} Contour {i}: x={x}, y={y}, w={w}, h={h}")
+
+                    box_x1 = max(0, x - w * (width_scale - 1) // 2)
+                    box_y1 = y
+                    box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+                    box_y2 = y + h
+                    logger.debug(f"Drawing rectangle for {color_name}: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
+
+                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="black", width=3)
+
+                logger.debug(f"Bounding boxes drawn for {color_name}")
+                return pil_image
+
+        # If no contours are found for any color, return the original image
+        logger.warning("No contours found for any specified colors")
+        return pil_image
+
+    except Exception as e:
+        logger.exception("Error in draw_bounding_box_colors_cv")
+        return None
+
+def draw_bounding_box_colors_cv_link(cv_image, width_scale=4):
+    """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
+    try:
+        logger.debug("Starting draw_bounding_box_colors_cv")
+
+        # Check the input image shape
+        height, width, channels = cv_image.shape
+        logger.debug(f"Image shape: height={height}, width={width}, channels={channels}")
+
+        # Convert image to HSV color space
+        hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+        logger.debug("Converted image to HSV color space successfully")
+
+        # Define HSV ranges for different colors
+        color_ranges = [
+            {"color": "red", "lower": (120, 70, 0), "upper": (140, 80, 100)},
+            {"color": "green", "lower": (0, 50, 40), "upper": (50, 190, 180)},
+            {"color": "yellow", "lower": (170, 130, 0), "upper": (255, 240, 110)},
+            {"color": "purple", "lower": (10, 0, 50), "upper": (150, 100, 170)}
+        ]
+
+        # Convert OpenCV image to PIL image for drawing
+        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_image)
+
+        # Iterate over color ranges
+        for color_range in color_ranges:
+            lower = color_range["lower"]
+            upper = color_range["upper"]
+            color_name = color_range["color"]
+
+            # Create mask for the current color
+            mask = cv2.inRange(hsv_image, lower, upper)
+            logger.debug(f"Mask created for {color_name} with lower={lower}, upper={upper}")
+
+            # Find contours in the mask
+            contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            logger.debug(f"Number of {color_name} contours found: {len(contours)}")
+
+            # If contours are found, draw bounding boxes and stop checking further colors
+            if contours:
+                for i, contour in enumerate(contours):
+                    x, y, w, h = cv2.boundingRect(contour)
+                    logger.debug(f"{color_name.capitalize()} Contour {i}: x={x}, y={y}, w={w}, h={h}")
+
+                    box_x1 = max(0, x - w * (width_scale - 1) // 2)
+                    box_y1 = y
+                    box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
+                    box_y2 = y + h
+                    logger.debug(f"Drawing rectangle for {color_name}: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
+
+                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="black", width=3)
+
+                logger.debug(f"Bounding boxes drawn for {color_name}")
+                return pil_image
+
+        # If no contours are found for any color, return the original image
+        logger.warning("No contours found for any specified colors")
+        return pil_image
+
+    except Exception as e:
+        logger.exception("Error in draw_bounding_box_colors_cv")
+        return None
+
+
+def draw_bounding_box_colors_cv(cv_image, width_scale=4):
+    """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
+    try:
+        logger.debug("Starting draw_bounding_box_colors_cv")
+
+        # Check the input image shape
+        height, width, channels = cv_image.shape
+        logger.debug(f"Image shape: height={height}, width={width}, channels={channels}")
+
+        # Convert image to HSV color space
+        hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+        logger.debug("Converted image to HSV color space successfully")
+
+        # Define HSV ranges for different colors
+        color_ranges = [
+            {"color": "red", "lower": (120, 70, 0), "upper": (140, 80, 100)},
+            {"color": "green", "lower": (0, 50, 40), "upper": (50, 190, 180)},
+            {"color": "yellow", "lower": (170, 130, 0), "upper": (255, 240, 110)},
+            {"color": "purple", "lower": (10, 0, 50), "upper": (150, 100, 170)}
         ]
 
         # Convert OpenCV image to PIL image for drawing
@@ -802,11 +931,23 @@ def process_image(request):
         except Exception as e:
             logger.exception("Keyword processing failed")
             return Response({"status": "error", "message": f"Keyword processing failed: {str(e)}"}, status=500)
-        
         # -------------------------
         # 예약표 이미지 마스킹 처리
         # -------------------------
-        v
+        try:
+            # process_and_mask_image 함수에서 반환된 BytesIO 객체
+            masked_image = process_and_mask_image(reservimage)
+            if masked_image:
+                # base64로 인코딩
+                masked_image_base64 = base64.b64encode(masked_image.getvalue()).decode('utf-8')
+                # 프론트에서 바로 <img> src 로 쓸 수 있도록 data URL 형태로 저장
+                response_data['masked_image'] = f"data:image/jpeg;base64,{masked_image_base64}"
+            else:
+                logger.error("masked_image is None.")
+
+        except Exception as e:
+            logger.exception("masked_File failed")
+            return Response({"status": "error", "message": "masked_File failed"}, status=500)
             
         # -------------------------
         # 좌석표 이미지 마스킹 처리
