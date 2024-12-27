@@ -196,7 +196,7 @@ def process_seat_image(image_file, booking_page):
             pil_image = draw_bounding_box_colors_cv_24(cv_image)
         else:
             logger.debug("Using purple bounding box")
-            pil_image = draw_bounding_box_colors_cv(cv_image)
+            pil_image = draw_bounding_box_colors_cv_park(cv_image)
 
         buffer = BytesIO()
         pil_image.save(buffer, format="JPEG")
@@ -305,10 +305,10 @@ def draw_bounding_box_colors_cv_24(cv_image, width_scale=4):
         logger.exception("Error in draw_bounding_box_colors_cv")
         return None
     
-def draw_bounding_box_colors_cv(cv_image, width_scale=4):
+def draw_bounding_box_colors_cv_park(cv_image, width_scale=4):
     """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
     try:
-        logger.debug("Starting draw_bounding_box_colors_cv")
+        logger.debug("Starting draw_bounding_box_colors_cv_park")
 
         # Check the input image shape
         height, width, channels = cv_image.shape
@@ -433,70 +433,6 @@ def draw_bounding_box_colors_cv_link(cv_image, width_scale=4):
         logger.exception("Error in draw_bounding_box_colors_cv")
         return None
 
-
-def draw_bounding_box_colors_cv(cv_image, width_scale=4):
-    """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
-    try:
-        logger.debug("Starting draw_bounding_box_colors_cv")
-
-        # Check the input image shape
-        height, width, channels = cv_image.shape
-        logger.debug(f"Image shape: height={height}, width={width}, channels={channels}")
-
-        # Convert image to HSV color space
-        hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-        logger.debug("Converted image to HSV color space successfully")
-
-        # Define HSV ranges for different colors
-        color_ranges = [
-            {"color": "red", "lower": (120, 70, 0), "upper": (140, 80, 100)},
-            {"color": "green", "lower": (0, 50, 40), "upper": (50, 190, 180)},
-            {"color": "yellow", "lower": (170, 130, 0), "upper": (255, 240, 110)},
-            {"color": "purple", "lower": (10, 0, 50), "upper": (150, 100, 170)}
-        ]
-
-        # Convert OpenCV image to PIL image for drawing
-        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_image)
-
-        # Iterate over color ranges
-        for color_range in color_ranges:
-            lower = color_range["lower"]
-            upper = color_range["upper"]
-            color_name = color_range["color"]
-
-            # Create mask for the current color
-            mask = cv2.inRange(hsv_image, lower, upper)
-            logger.debug(f"Mask created for {color_name} with lower={lower}, upper={upper}")
-
-            # Find contours in the mask
-            contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            logger.debug(f"Number of {color_name} contours found: {len(contours)}")
-
-            # If contours are found, draw bounding boxes and stop checking further colors
-            if contours:
-                for i, contour in enumerate(contours):
-                    x, y, w, h = cv2.boundingRect(contour)
-                    logger.debug(f"{color_name.capitalize()} Contour {i}: x={x}, y={y}, w={w}, h={h}")
-
-                    box_x1 = max(0, x - w * (width_scale - 1) // 2)
-                    box_y1 = y
-                    box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
-                    box_y2 = y + h
-                    logger.debug(f"Drawing rectangle for {color_name}: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
-
-                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="black", width=3)
-
-                logger.debug(f"Bounding boxes drawn for {color_name}")
-                return pil_image
-
-        # If no contours are found for any color, return the original image
-        logger.warning("No contours found for any specified colors")
-        return pil_image
-
-    except Exception as e:
-        logger.exception("Error in draw_bounding_box_colors_cv")
-        return None
 
 class TicketPostListView(APIView):
     def post(self, request):
