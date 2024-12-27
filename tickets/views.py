@@ -320,7 +320,7 @@ def draw_bounding_box_colors_cv(cv_image, width_scale=4):
 
         # Define HSV ranges for different colors
         color_ranges = [
-            {"color": "purple", "lower": (80, 60, 170), "upper": (180, 150, 255)},
+            {"color": "purple", "lower": (120, 50, 50), "upper": (140, 255, 255)},
             {"color": "green", "lower": (40, 110, 0), "upper": (150, 230, 110)},
             {"color": "blue", "lower": (30, 100, 150), "upper": (170, 220, 255)},
             {"color": "orange", "lower": (170, 60, 20), "upper": (255, 200, 155)}
