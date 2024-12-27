@@ -136,31 +136,37 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-def process_and_mask_image(image, ocr_data):
+def process_and_mask_image(image,denoised_image):
     """
     이미지에서 민감한 정보를 마스킹하여 반환합니다.
     """
     try:
         logger.debug("Starting process_and_mask_image")
         draw = ImageDraw.Draw(image)
+        
+        # OCR로 텍스트 추출
+        logger.debug("Running OCR on the image")
+        data = pytesseract.image_to_data(denoised_image, output_type=pytesseract.Output.DICT, lang="kor+eng")
 
-        for i in range(len(ocr_data['text'])):
-            if '번' in ocr_data['text'][i]:
-                x, y, w, h = ocr_data['left'][i], ocr_data['top'][i], ocr_data['width'][i], ocr_data['height'][i]
-                image_width = image.width
-                logger.debug(f"Found text '{ocr_data['text'][i]}' at ({x}, {y}, {w}, {h})")
-                draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
-                break
-
+        logger.debug(f"Extracted OCR data: {data}")
+        
+        for i in range(len(data['text'])):
+                if '번' in data['text'][i] :
+                    x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                    image_width = image.width
+                    print(f"Found text '{data['text'][i]}' at position ({x}, {y}, {w}, {h})")  # 디버깅: 텍스트 위치 출력
+                    draw.rectangle([(0, y - 10), (image_width, y + h + 10)], fill="black")
+                    break  # 첫 번째 "번" 조건 만족 시 루프 종료
+    
         buffer = BytesIO()
         image.save(buffer, format="JPEG")
         buffer.seek(0)
         logger.debug("Masked image successfully created")
         return buffer
-
     except Exception as e:
         logger.exception("Error in masking process")
         return None
+
 
 
 def process_seat_image(image_file, booking_page):
@@ -831,8 +837,7 @@ def process_image(request):
             denoised_image = cv2.medianBlur(binary_image, 3)
 
             # Single OCR extraction
-            ocr_data = pytesseract.image_to_data(denoised_image, output_type=pytesseract.Output.DICT, lang="kor+eng")
-            extracted_text = " ".join(ocr_data['text']).strip()
+            extracted_text = pytesseract.image_to_string(denoised_image, lang="kor+eng")
             logger.debug(f"Extracted text: {extracted_text}")
 
         except Exception as e:
@@ -862,7 +867,7 @@ def process_image(request):
         # 예약표 이미지 마스킹 처리
         # -------------------------
         try:
-            masked_image = process_and_mask_image(reservimage, ocr_data)
+            masked_image = process_and_mask_image(reservimage,denoised_image)
             if masked_image:
                 masked_image_base64 = base64.b64encode(masked_image.getvalue()).decode('utf-8')
                 response_data['masked_image'] = f"data:image/jpeg;base64,{masked_image_base64}"
