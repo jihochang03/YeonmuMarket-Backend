@@ -106,5 +106,77 @@ Docker를 활용해 개발 및 배포 환경을 통합하며, PostgreSQL 데이�
 ## 📝 TODO 리스트
 - 티켓 교환 서비스 추가
 - 다국어 지원 (한국어/영어)
-- 티켓 교환 후 연락 수단 마련련
+- 티켓 교환 후 연락 수단 마련
+
+
+erDiagram
+
+    %% -----------------------------
+    %%  User, Account, UserProfile
+    %% -----------------------------
+    User ||--|| Account : "OneToOne"
+    User ||--|| UserProfile : "OneToOne"
+
+    %% ---------------
+    %%  Ticket
+    %% ---------------
+    User ||--o{ Ticket : "owner (FK)"
+    User ||--o{ Ticket : "transferee (FK)"
+    Ticket {
+        int id PK
+        string title
+        date date
+        string seat
+        string booking_page
+        string booking_details
+        decimal price
+        string casting
+        string phone_last_digits
+        string status
+        string uploaded_file_url
+        string masked_file_url
+        string uploaded_seat_image_url
+        string processed_seat_image_url
+    }
+
+    %% ------------------
+    %%  TicketPost
+    %% ------------------
+    Ticket ||--|| TicketPost : "OneToOne"
+    User ||--o{ TicketPost : "author (FK)"
+    TicketPost {
+        datetime created_at
+    }
+
+    %% ------------------
+    %%  Conversation
+    %% ------------------
+    Ticket ||--o{ Conversation : "ticket (FK)"
+    User ||--o{ Conversation : "owner (FK)"
+    User ||--o{ Conversation : "transferee (FK)"
+    Conversation {
+        int transaction_step
+        bool is_transfer_intent
+        bool is_acceptance_intent
+    }
+
+    %% -------------------------
+    %%  Account / UserProfile
+    %% -------------------------
+    Account {
+        string bank_account
+        string bank_name
+        string account_holder
+        bool is_payment_verified
+    }
+
+    UserProfile {
+        int profilepic_id
+        string nickname
+        bool is_social_login
+        string kakao_email
+        bool is_payment_verified
+        string kakao_token
+    }
+
 
