@@ -134,10 +134,10 @@ class ExchangeDetailView(APIView):
             # Ticket 가져오기
             ticket_1 = Ticket.objects.get(id=ticket_id)
             
-            Exchange = Exchange.objects.get(ticket_1=ticket_1)
-            print(f"[ExchangeDetailView] Exchange retrieved: {Exchange}")
+            exchange = Exchange.objects.get(ticket_1=ticket_1)
+            print(f"[ExchangeDetailView] Exchange retrieved: {exchange}")
             
-            ticket_2=Exchange.ticket_2
+            ticket_2=exchange.ticket_2
 
             # TicketPost 가져오기
             try:
@@ -156,35 +156,33 @@ class ExchangeDetailView(APIView):
             # TicketPost의 ticket 정보 동기화
             ticket_post_2.ticket = ticket_2
   
-
-
             # 직렬화
             serializer_1 = TicketPostSerializer(ticket_post_1, context={'request': request})
             serializer_2 = TicketPostSerializer(ticket_post_1, context={'request': request})
 
             # Account 가져오기
             account_1 = Account.objects.get(user=ticket_1.owner)
-            account_2 = Account.objects.get(user=Exchange.ticket_2.owner)
+            account_2 = Account.objects.get(user=exchange.ticket_2.owner)
 
 
             # Check if the user is part of the Exchange
-            if user != Exchange.owner and user != Exchange.transferee:
-                print(f"[ExchangeDetailView] User {user} is not part of the Exchange {Exchange}")
+            if user != exchange.owner and user != exchange.transferee:
+                print(f"[ExchangeDetailView] User {user} is not part of the Exchange {exchange}")
                 return Response({"detail": "You are not part of this Exchange."}, status=status.HTTP_403_FORBIDDEN)
 
             # Prepare the data to return
             data = {
-                "Exchange_id": Exchange.id,
-                "transaction_step": Exchange.transaction_step,
-                "user_role": "seller" if user == Exchange.owner else "buyer",
+                "Exchange_id": exchange.id,
+                "transaction_step": exchange.transaction_step,
+                "user_role": "seller" if user == exchange.owner else "buyer",
                 "bank_account_seller": account_1.bank_account,
                 "bank_account_buyer": account_2.bank_account,
                 "bank_name_seller": account_1.bank_name,
                 "bank_name_buyer": account_2.bank_name,
                 "account_holder_seller": account_1.account_holder,
                 "account_holder_buyer": account_2.account_holder,
-                "buyer_name": Exchange.transferee.username if Exchange.transferee else '',
-                "seller_name": Exchange.owner.username,
+                "buyer_name": exchange.transferee.username if exchange.transferee else '',
+                "seller_name": exchange.owner.username,
             }
             response_data = {
             "exchange_data": data,

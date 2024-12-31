@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from .models import Ticket, TicketPost
 from .serializers import TicketSerializer, TicketPostSerializer
+from exchange.serializers import ExchangeSerializer
 from drf_yasg.utils import swagger_auto_schema
 import json
 from django.db.models import Q
@@ -29,6 +30,7 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from conversations.models import Conversation  # Import Conversation model
 from user.models import UserProfile
+from exchange.models import Exchange
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
@@ -753,21 +755,24 @@ class ExchangeListView(APIView):
     @swagger_auto_schema(
         operation_id="교환 티켓 목록 조회",
         operation_description="사용자가 교환한 티켓 목록을 조회합니다.",
-        responses={200: TicketSerializer(many=True), 404: "Not Found", 400: "Bad Request"},
+        responses={200: ExchangeSerializer(many=True), 404: "Not Found", 400: "Bad Request"},
     )
     def get(self, request):
         user = request.user
-        # isTransfer=False 인 티켓만 필터
-        
-        exchange_list = Ticket.objects.filter(
-            Q(owner=user) | Q(transferee=user),  # owner가 user이거나 transferee가 user인 경우
-            isTransfer=False                    # 그리고 isTransfer가 False인 경우
+
+        # 교환 티켓 목록 필터링
+        exchange_list = Exchange.objects.filter(
+            Q(owner=user) | Q(transferee=user),  # owner가 user이거나 transferee가 user인 경우                  # 그리고 isTransfer가 False인 경우
         ).order_by('-id')
 
+        # 교환 데이터가 없을 경우
         if not exchange_list.exists():
             return Response({"detail": "No exchanged tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = TicketSerializer(exchange_list, many=True, context={'request': request})
+        # ExchangeSerializer를 사용하여 데이터를 직렬화
+        serializer = ExchangeSerializer(exchange_list, many=True, context={'request': request})
+
+        # 직렬화된 데이터를 반환
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -780,7 +785,8 @@ class ReceivedListView(APIView):
     def get(self, request):
         user = request.user
         received_list = Ticket.objects.filter(
-            transferee=user
+            transferee=user,
+            isTransfer=True,
         ).order_by('-id')
 
         if not received_list.exists():
