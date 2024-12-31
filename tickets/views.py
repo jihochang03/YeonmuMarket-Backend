@@ -455,6 +455,7 @@ class TicketPostListView(APIView):
         uploaded_seat_image = request.FILES["seatImage"]
         uploaded_masked_file =request.FILES["maskedReservImage"]
         uploaded_masked_seat_file =request.FILES["maskedSeatImage"]
+        isTransfer=request.data.get("isTransfer")
 
         try:
             # Ticket 객체 생성
@@ -468,6 +469,7 @@ class TicketPostListView(APIView):
                 casting=casting,
                 phone_last_digits=phone_last_digits,
                 owner=user,
+                isTransfer=isTransfer,
             )
 
             reserv_file_path = get_unique_file_path(uploaded_file, prefix=f"tickets/{ticket.id}")
