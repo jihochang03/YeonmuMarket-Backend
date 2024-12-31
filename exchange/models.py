@@ -14,7 +14,9 @@ class Exchange(models.Model):
     ticket_2 = models.ForeignKey(
         Ticket,
         on_delete=models.CASCADE,
-        related_name='exchanges_as_ticket_2'  # 관련 이름 지정
+        related_name='exchanges_as_ticket_2',  # 관련 이름 지정
+        null=True,
+        blank=True,
     )
     transaction_step = models.IntegerField(default=0)  # Transaction progress tracking
     is_transfer_intent = models.BooleanField(default=False)

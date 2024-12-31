@@ -758,9 +758,10 @@ class ExchangeListView(APIView):
     def get(self, request):
         user = request.user
         # isTransfer=False 인 티켓만 필터
+        
         exchange_list = Ticket.objects.filter(
-            owner=user,
-            isTransfer=False,  # 교환글
+            Q(owner=user) | Q(transferee=user),  # owner가 user이거나 transferee가 user인 경우
+            isTransfer=False                    # 그리고 isTransfer가 False인 경우
         ).order_by('-id')
 
         if not exchange_list.exists():

@@ -63,7 +63,7 @@ class JoinExchangeView(APIView):
 
             # Retrieve or create an Exchange object
             exchange, created = Exchange.objects.get_or_create(
-                ticket_1=ticket_1, defaults={'owner': ticket_1.owner}
+                ticket_1=ticket_1, ticket_2=ticket_2, defaults={'owner': ticket_1.owner}
             )
             print(f"[JoinExchangeView] Exchange {'created' if created else 'retrieved'}: {exchange}")
 
