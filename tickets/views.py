@@ -718,6 +718,7 @@ class TicketPostDetailView(APIView):
         response_data = serializer.data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+    
 class TransferListView(APIView):
     @swagger_auto_schema(
         operation_id="양도 티켓 목록 조회",
@@ -726,15 +727,36 @@ class TransferListView(APIView):
     )
     def get(self, request):
         user = request.user
+        # isTransfer=True 인 티켓만 필터
         transfer_list = Ticket.objects.filter(
-            owner=user, status__in=['waiting', 'transfer_pending', 'transfer_completed']
+            owner=user,
+            isTransfer=True,  # 양도글
         ).order_by('-id')
 
         if not transfer_list.exists():
             return Response({"detail": "No transferred tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # context에 request를 전달
         serializer = TicketSerializer(transfer_list, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ExchangeListView(APIView):
+    @swagger_auto_schema(
+        operation_id="교환 티켓 목록 조회",
+        operation_description="사용자가 교환한 티켓 목록을 조회합니다.",
+        responses={200: TicketSerializer(many=True), 404: "Not Found", 400: "Bad Request"},
+    )
+    def get(self, request):
+        user = request.user
+        # isTransfer=False 인 티켓만 필터
+        exchange_list = Ticket.objects.filter(
+            owner=user,
+            isTransfer=False,  # 교환글
+        ).order_by('-id')
+
+        if not exchange_list.exists():
+            return Response({"detail": "No exchanged tickets found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TicketSerializer(exchange_list, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -822,9 +844,6 @@ def process_image(request):
         seat_image = request.FILES['seatImage']
 
         try:
-            # -------------------------
-            # 예약표 이미지 OCR 및 처리
-            # -------------------------
             reserv_image.seek(0)  # Ensure file pointer is at the beginning
             logger.debug("Starting OCR processing for reservImage")
 
@@ -844,9 +863,6 @@ def process_image(request):
             logger.exception("OCR processing failed")
             return Response({"status": "error", "message": "OCR failed."}, status=500)
 
-        # -------------------------
-        # Keyword-specific processing
-        # -------------------------
         try:
             if keyword == '인터파크':
                 response_data = process_interpark_data(extracted_text)
@@ -863,9 +879,6 @@ def process_image(request):
             logger.exception("Keyword processing failed")
             return Response({"status": "error", "message": f"Keyword processing failed: {str(e)}"}, status=500)
 
-        # -------------------------
-        # 예약표 이미지 마스킹 처리
-        # -------------------------
         try:
             masked_image = process_and_mask_image(reservimage,denoised_image)
             if masked_image:
@@ -878,9 +891,6 @@ def process_image(request):
             logger.exception("Masked image processing failed")
             return Response({"status": "error", "message": "Masked image processing failed"}, status=500)
 
-        # -------------------------
-        # 좌석표 이미지 마스킹 처리
-        # -------------------------
         try:
             seat_image.seek(0)
             seatimage_pil = Image.open(seat_image)

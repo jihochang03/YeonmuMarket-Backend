@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'payments',
     'django_extensions',
     'storages',
+    'exchange',
 ]
 
 MIDDLEWARE = [

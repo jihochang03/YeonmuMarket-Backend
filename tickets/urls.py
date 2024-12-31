@@ -3,6 +3,7 @@ from .views import (
     TicketPostListView, 
     TicketPostDetailView, 
     TransferListView,
+    ExchangeListView,
     ReceivedListView
 )
 from django.conf import settings
@@ -16,6 +17,7 @@ urlpatterns = [
     path('create/', TicketPostListView.as_view()),
     path('ticketpost/<int:ticket_post_id>/', TicketPostDetailView.as_view()),
     path('transferred/', TransferListView.as_view(), name='transferred-tickets'),
+    path('exchange/', ExchangeListView.as_view(), name='exchanged-tickets'),
     path('purchased/', ReceivedListView.as_view(), name='received-tickets'),
     path('process_image/', process_image, name='process_image'),
     path('post-tweet/', post_tweet, name='post_tweet'),
