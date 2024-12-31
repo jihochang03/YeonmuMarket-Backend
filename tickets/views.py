@@ -455,7 +455,15 @@ class TicketPostListView(APIView):
         uploaded_seat_image = request.FILES["seatImage"]
         uploaded_masked_file =request.FILES["maskedReservImage"]
         uploaded_masked_seat_file =request.FILES["maskedSeatImage"]
-        isTransfer=request.data.get("isTransfer")
+        is_transfer_value = request.data.get("isTransfer")
+
+        # 문자열을 Boolean으로 변환
+        if is_transfer_value in ["true", "True", True]:
+            isTransfer = True
+        elif is_transfer_value in ["false", "False", False]:
+            isTransfer = False
+        else:
+            isTransfer = None  # 또는 적절한 기본값 설정
 
         try:
             # Ticket 객체 생성
