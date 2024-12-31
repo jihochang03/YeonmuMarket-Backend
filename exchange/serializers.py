@@ -5,7 +5,7 @@ from .models import Exchange
 class ExchangeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exchange
-        fields = ['id', 'ticket_1', 'ticket_2', 'owner', 'transferee', 'isTransfer']
+        fields = "__all__"
 
     def get_ticket_1(self, obj):
         from tickets.serializers import TicketSerializer
