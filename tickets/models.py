@@ -39,13 +39,21 @@ class Ticket(models.Model):
     processed_seat_image_url = models.URLField(max_length=500, null=True, blank=True)
 
     phone_last_digits = models.CharField(max_length=4, blank=True, null=True)
+    isTransfer = models.BooleanField(default=True)
 
-    STATUS_CHOICES = [
+
+    STATUS_CHOICES_TRANSFER = [
         ("waiting", "양수자 대기"),
         ("transfer_pending", "양도 중"),
         ("transfer_completed", "양도 완료"),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="waiting")
+    STATUS_CHOICES_EXCHANGE = [
+        ("waiting", "교환자 대기"),
+        ("exchange_pending", "교환 중"),
+        ("exchange_completed", "교환 완료"),
+    ]
+    status_transfer = models.CharField(max_length=20, choices=STATUS_CHOICES_TRANSFER, default="waiting")
+    status_exchange = models.CharField(max_length=20, choices=STATUS_CHOICES_EXCHANGE, default="waiting")
 
     def __str__(self):
         return self.title

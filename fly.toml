@@ -24,7 +24,8 @@ console_command = '/code/manage.py shell'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 2  # 최소 2개의 머신 실행
+  max_machines_running = 4  # 최대 4개의 머신 실행
   processes = ['app']
 
 [[vm]]

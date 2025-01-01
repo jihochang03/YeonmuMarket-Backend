@@ -81,9 +81,9 @@ class JoinConversationView(APIView):
                 print(f"[JoinConversationView] User {user} joined the conversation {conversation}")
 
             # Update ticket status to 'transfer_pending'
-                ticket.status = 'transfer_pending'
+                ticket.status_transfer = 'transfer_pending'
                 ticket.save()
-                print(f"[JoinConversationView] Ticket status updated to 'transfer_pending': {ticket.status}")
+                print(f"[JoinConversationView] Ticket status updated to 'transfer_pending': {ticket.status_transfer}")
 
                 chat_url = f"https://www.yeonmu.shop/chat/{ticket_id}"  # Adjust the URL as per your frontend routing
                 return Response({
@@ -99,7 +99,6 @@ class JoinConversationView(APIView):
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ConversationDetailView(APIView):
-
     @swagger_auto_schema(
         operation_id="대화방 상세 정보",
         operation_description="특정 티켓과 사용자에 대한 대화방의 세부 정보를 가져옵니다.",
@@ -362,7 +361,7 @@ class ConfirmReceiptView(APIView):
 
             # Update ticket status
             ticket = conversation.ticket
-            ticket.status = 'transfer_completed'
+            ticket.status_transfer = 'transfer_completed'
             ticket.save()
             print(f"[ConfirmReceiptView] Ticket updated: {ticket}")
 
@@ -411,7 +410,7 @@ class LeaveConversationView(APIView):
 
             # Reset the transferee and transaction step
             ticket.transferee = None
-            ticket.status = "waiting"
+            ticket.status_transfer = "waiting"
             ticket.save()
             # TicketPost 가져오기
             try:
@@ -433,7 +432,7 @@ class LeaveConversationView(APIView):
             return Response({"detail": "You have left the conversation. A new user can now join."}, status=status.HTTP_200_OK)
 
         except Conversation.DoesNotExist:
-            print(f"[LeaveConversationView] Conversation with id {conversation_id} does not exist.")
+            print(f"[LeaveConversationView] Conversation with id {ticket_id} does not exist.")
             return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             print(f"[LeaveConversationView] An unexpected error occurred: {str(e)}")

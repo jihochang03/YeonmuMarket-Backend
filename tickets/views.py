@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from .models import Ticket, TicketPost
 from .serializers import TicketSerializer, TicketPostSerializer
+from exchange.serializers import ExchangeSerializer
 from drf_yasg.utils import swagger_auto_schema
 import json
 from django.db.models import Q
@@ -29,6 +30,7 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from conversations.models import Conversation  # Import Conversation model
 from user.models import UserProfile
+from exchange.models import Exchange
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
@@ -136,7 +138,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-def process_and_mask_image(image):
+def process_and_mask_image(image,denoised_image):
     """
     이미지에서 민감한 정보를 마스킹하여 반환합니다.
     """
@@ -144,15 +146,9 @@ def process_and_mask_image(image):
         logger.debug("Starting process_and_mask_image")
         draw = ImageDraw.Draw(image)
         
-        np_image = np.array(image)
-            
-        gray_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2GRAY)
-        binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        denoised_image = cv2.medianBlur(binary_image, 3)
-
         # OCR로 텍스트 추출
         logger.debug("Running OCR on the image")
-        data = pytesseract.image_to_data(denoised_image, output_type=pytesseract.Output.DICT, lang="kor")
+        data = pytesseract.image_to_data(denoised_image, output_type=pytesseract.Output.DICT, lang="kor+eng")
 
         logger.debug(f"Extracted OCR data: {data}")
         
@@ -169,10 +165,10 @@ def process_and_mask_image(image):
         buffer.seek(0)
         logger.debug("Masked image successfully created")
         return buffer
-
     except Exception as e:
         logger.exception("Error in masking process")
         return None
+
 
 
 def process_seat_image(image_file, booking_page):
@@ -196,7 +192,7 @@ def process_seat_image(image_file, booking_page):
             pil_image = draw_bounding_box_colors_cv_24(cv_image)
         else:
             logger.debug("Using purple bounding box")
-            pil_image = draw_bounding_box_colors_cv(cv_image)
+            pil_image = draw_bounding_box_colors_cv_park(cv_image)
 
         buffer = BytesIO()
         pil_image.save(buffer, format="JPEG")
@@ -305,10 +301,10 @@ def draw_bounding_box_colors_cv_24(cv_image, width_scale=4):
         logger.exception("Error in draw_bounding_box_colors_cv")
         return None
     
-def draw_bounding_box_colors_cv(cv_image, width_scale=4):
+def draw_bounding_box_colors_cv_park(cv_image, width_scale=4):
     """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
     try:
-        logger.debug("Starting draw_bounding_box_colors_cv")
+        logger.debug("Starting draw_bounding_box_colors_cv_park")
 
         # Check the input image shape
         height, width, channels = cv_image.shape
@@ -320,10 +316,10 @@ def draw_bounding_box_colors_cv(cv_image, width_scale=4):
 
         # Define HSV ranges for different colors
         color_ranges = [
-            {"color": "purple", "lower": (120, 70, 50), "upper": (140, 255, 255)},
-            {"color": "green", "lower": (40, 70, 50), "upper": (80, 255, 255)},
-            {"color": "blue", "lower": (100, 70, 50), "upper": (130, 255, 255)},
-            {"color": "orange", "lower": (10, 100, 20), "upper": (25, 255, 255)}
+            {"color": "purple", "lower": (120, 50, 50), "upper": (140, 255, 255)},
+            {"color": "green", "lower": (40, 110, 0), "upper": (150, 230, 110)},
+            {"color": "blue", "lower": (30, 100, 150), "upper": (170, 220, 255)},
+            {"color": "orange", "lower": (170, 60, 20), "upper": (255, 200, 155)}
         ]
 
         # Convert OpenCV image to PIL image for drawing
@@ -434,70 +430,6 @@ def draw_bounding_box_colors_cv_link(cv_image, width_scale=4):
         return None
 
 
-def draw_bounding_box_colors_cv(cv_image, width_scale=4):
-    """좌석 이미지에서 보라색, 녹색, 파란색, 주황색 순으로 박스 그리기"""
-    try:
-        logger.debug("Starting draw_bounding_box_colors_cv")
-
-        # Check the input image shape
-        height, width, channels = cv_image.shape
-        logger.debug(f"Image shape: height={height}, width={width}, channels={channels}")
-
-        # Convert image to HSV color space
-        hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-        logger.debug("Converted image to HSV color space successfully")
-
-        # Define HSV ranges for different colors
-        color_ranges = [
-            {"color": "red", "lower": (120, 70, 0), "upper": (140, 80, 100)},
-            {"color": "green", "lower": (0, 50, 40), "upper": (50, 190, 180)},
-            {"color": "yellow", "lower": (170, 130, 0), "upper": (255, 240, 110)},
-            {"color": "purple", "lower": (10, 0, 50), "upper": (150, 100, 170)}
-        ]
-
-        # Convert OpenCV image to PIL image for drawing
-        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_image)
-
-        # Iterate over color ranges
-        for color_range in color_ranges:
-            lower = color_range["lower"]
-            upper = color_range["upper"]
-            color_name = color_range["color"]
-
-            # Create mask for the current color
-            mask = cv2.inRange(hsv_image, lower, upper)
-            logger.debug(f"Mask created for {color_name} with lower={lower}, upper={upper}")
-
-            # Find contours in the mask
-            contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            logger.debug(f"Number of {color_name} contours found: {len(contours)}")
-
-            # If contours are found, draw bounding boxes and stop checking further colors
-            if contours:
-                for i, contour in enumerate(contours):
-                    x, y, w, h = cv2.boundingRect(contour)
-                    logger.debug(f"{color_name.capitalize()} Contour {i}: x={x}, y={y}, w={w}, h={h}")
-
-                    box_x1 = max(0, x - w * (width_scale - 1) // 2)
-                    box_y1 = y
-                    box_x2 = min(width, x + w + w * (width_scale - 1) // 2)
-                    box_y2 = y + h
-                    logger.debug(f"Drawing rectangle for {color_name}: ({box_x1}, {box_y1}), ({box_x2}, {box_y2})")
-
-                    draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="black", width=3)
-
-                logger.debug(f"Bounding boxes drawn for {color_name}")
-                return pil_image
-
-        # If no contours are found for any color, return the original image
-        logger.warning("No contours found for any specified colors")
-        return pil_image
-
-    except Exception as e:
-        logger.exception("Error in draw_bounding_box_colors_cv")
-        return None
-
 class TicketPostListView(APIView):
     def post(self, request):
         user = request.user
@@ -525,6 +457,15 @@ class TicketPostListView(APIView):
         uploaded_seat_image = request.FILES["seatImage"]
         uploaded_masked_file =request.FILES["maskedReservImage"]
         uploaded_masked_seat_file =request.FILES["maskedSeatImage"]
+        is_transfer_value = request.data.get("isTransfer")
+
+        # 문자열을 Boolean으로 변환
+        if is_transfer_value in ["true", "True", True]:
+            isTransfer = True
+        elif is_transfer_value in ["false", "False", False]:
+            isTransfer = False
+        else:
+            isTransfer = None  # 또는 적절한 기본값 설정
 
         try:
             # Ticket 객체 생성
@@ -538,6 +479,7 @@ class TicketPostListView(APIView):
                 casting=casting,
                 phone_last_digits=phone_last_digits,
                 owner=user,
+                isTransfer=isTransfer,
             )
 
             reserv_file_path = get_unique_file_path(uploaded_file, prefix=f"tickets/{ticket.id}")
@@ -788,6 +730,7 @@ class TicketPostDetailView(APIView):
         response_data = serializer.data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+    
 class TransferListView(APIView):
     @swagger_auto_schema(
         operation_id="양도 티켓 목록 조회",
@@ -796,16 +739,52 @@ class TransferListView(APIView):
     )
     def get(self, request):
         user = request.user
+        # isTransfer=True 인 티켓만 필터
         transfer_list = Ticket.objects.filter(
-            owner=user, status__in=['waiting', 'transfer_pending', 'transfer_completed']
+            owner=user,
+            isTransfer=True,  # 양도글
         ).order_by('-id')
 
         if not transfer_list.exists():
             return Response({"detail": "No transferred tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # context에 request를 전달
         serializer = TicketSerializer(transfer_list, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ExchangeListView(APIView):
+    @swagger_auto_schema(
+        operation_id="교환 티켓 목록 조회",
+        operation_description="사용자가 교환한 티켓 목록을 조회합니다.",
+        responses={200: ExchangeSerializer(many=True), 404: "Not Found", 400: "Bad Request"},
+    )
+    def get(self, request):
+        user = request.user
+
+        # 교환 티켓 목록 필터링
+        exchange_list = Exchange.objects.filter(
+            Q(owner=user) | Q(transferee=user),  # owner가 user이거나 transferee가 user인 경우                  # 그리고 isTransfer가 False인 경우
+        ).order_by('-id')
+        
+        transfer_list = Ticket.objects.filter(
+            owner=user,
+            isTransfer=False,
+            transferee__isnull=True  # transferee가 비어 있는 경우
+        ).order_by('-id')
+        
+
+        # 교환 데이터가 없을 경우
+        if not exchange_list.exists():
+            return Response({"detail": "No exchanged tickets found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # ExchangeSerializer를 사용하여 데이터를 직렬화
+        exchange_serializer = ExchangeSerializer(exchange_list, many=True, context={'request': request})
+        transfer_serializer = TicketSerializer(transfer_list, many=True, context={'request': request})
+
+        # 직렬화된 데이터를 반환
+        return Response({
+            "exchanges": exchange_serializer.data,
+            "available_tickets": transfer_serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class ReceivedListView(APIView):
@@ -817,7 +796,8 @@ class ReceivedListView(APIView):
     def get(self, request):
         user = request.user
         received_list = Ticket.objects.filter(
-            transferee=user
+            transferee=user,
+            isTransfer=True,
         ).order_by('-id')
 
         if not received_list.exists():
@@ -892,30 +872,25 @@ def process_image(request):
         seat_image = request.FILES['seatImage']
 
         try:
-            # -------------------------
-            # 예약표 이미지 OCR 처리
-            # -------------------------
             reserv_image.seek(0)  # Ensure file pointer is at the beginning
             logger.debug("Starting OCR processing for reservImage")
 
             reservimage = Image.open(BytesIO(reserv_image.read()))
             logger.debug("reservImage opened successfully for OCR")
             image_arr = np.array(reservimage)
-            
+
             gray_image = cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
             binary_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
             denoised_image = cv2.medianBlur(binary_image, 3)
 
+            # Single OCR extraction
             extracted_text = pytesseract.image_to_string(denoised_image, lang="kor+eng")
-            logger.debug(f"Raw extracted text: {extracted_text}")
+            logger.debug(f"Extracted text: {extracted_text}")
 
         except Exception as e:
             logger.exception("OCR processing failed")
             return Response({"status": "error", "message": "OCR failed."}, status=500)
-        
-        # -------------------------
-        # Step 5: Keyword-specific processing
-        # -------------------------
+
         try:
             if keyword == '인터파크':
                 response_data = process_interpark_data(extracted_text)
@@ -931,34 +906,24 @@ def process_image(request):
         except Exception as e:
             logger.exception("Keyword processing failed")
             return Response({"status": "error", "message": f"Keyword processing failed: {str(e)}"}, status=500)
-        # -------------------------
-        # 예약표 이미지 마스킹 처리
-        # -------------------------
+
         try:
-            # process_and_mask_image 함수에서 반환된 BytesIO 객체
-            masked_image = process_and_mask_image(reservimage)
+            masked_image = process_and_mask_image(reservimage,denoised_image)
             if masked_image:
-                # base64로 인코딩
                 masked_image_base64 = base64.b64encode(masked_image.getvalue()).decode('utf-8')
-                # 프론트에서 바로 <img> src 로 쓸 수 있도록 data URL 형태로 저장
                 response_data['masked_image'] = f"data:image/jpeg;base64,{masked_image_base64}"
             else:
                 logger.error("masked_image is None.")
 
         except Exception as e:
-            logger.exception("masked_File failed")
-            return Response({"status": "error", "message": "masked_File failed"}, status=500)
-            
-        # -------------------------
-        # 좌석표 이미지 마스킹 처리
-        # -------------------------
-        try:
-            seat_image.seek(0)  # Ensure file pointer is at the beginning
-            seatimage_pil = Image.open(seat_image)
-            logger.debug("seatImage opened successfully for OCR")
+            logger.exception("Masked image processing failed")
+            return Response({"status": "error", "message": "Masked image processing failed"}, status=500)
 
-            # 예: process_seat_image에서 좌석표 이미지를 특정 방식으로 가공하고 
-            #     마스킹 된 BytesIO 객체를 리턴한다고 가정
+        try:
+            seat_image.seek(0)
+            seatimage_pil = Image.open(seat_image)
+            logger.debug("seatImage opened successfully")
+
             masked_seat_image = process_seat_image(seatimage_pil, keyword)
             if masked_seat_image:
                 masked_seat_image_base64 = base64.b64encode(masked_seat_image.getvalue()).decode('utf-8')
@@ -967,16 +932,14 @@ def process_image(request):
                 logger.error("masked_seat_image is None.")
 
         except Exception as e:
-            logger.exception("masked_File failed")
-            return Response({"status": "error", "message": "masked_File failed"}, status=500)   
-            
-        # Step 6: Return response
+            logger.exception("Masked seat image processing failed")
+            return Response({"status": "error", "message": "Masked seat image processing failed"}, status=500)
+
         return Response(response_data, status=200)
 
     except Exception as e:
         logger.exception("Unexpected error during image processing")
         return Response({"status": "error", "message": f"Unexpected error: {str(e)}"}, status=500)
-
 
 
 

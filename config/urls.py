@@ -40,6 +40,7 @@ urlpatterns = [
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('api/payments/', include('payments.urls')),  # payments 앱 URL 연결
     path('api/conversations/', include('conversations.urls')),  # conversations 앱 URL 연결
+    path('api/exchange/', include('exchange.urls')), 
     # path('api/kakao/login/', KakaoLoginView.as_view(), name='kakao-login'),
     # path('api/kakao/callback/', KakaoSignInCallbackView.as_view(), name='kakao-callback'),
 ]
