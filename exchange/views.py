@@ -90,6 +90,7 @@ class JoinExchangeView(APIView):
             if not exchange.transferee:
                 exchange.transferee = user
                 exchange.ticket_2 = ticket_2
+                exchange.transaction_step=1
                 exchange.save()
 
                 ticket_1.transferee = user
@@ -236,14 +237,14 @@ class TransferIntentView(APIView):
         try:
             user = request.user
             print(f"[TransferIntentView] Request user: {user}, is_authenticated: {user.is_authenticated}")
-            ticket = Ticket.objects.get(id=ticket_id)
-            print(f"[[TransferIntentView] Ticket found: {ticket}")
-            exchange = Exchange.objects.get(ticket=ticket)
+            ticket_1 = Ticket.objects.get(id=ticket_id)
+            print(f"[[TransferIntentView] Ticket found: {ticket_1}")
+            exchange = Exchange.objects.get(ticket_1=ticket_1)
             print(f"[TransferIntentView] exchange found: {exchange}")
 
             if user == exchange.transferee:
                 print(f"[TransferIntentView] User {user} is transferee")
-                if exchange.transaction_step != 0:
+                if exchange.transaction_step != 1:
                     print(f"[TransferIntentView] Invalid state for buyer to confirm intent: transaction_step={exchange.transaction_step}")
                     return Response({"detail": "Invalid state for buyer to confirm intent."}, status=status.HTTP_400_BAD_REQUEST)
                 exchange.is_acceptance_intent = True
@@ -261,13 +262,13 @@ class TransferIntentView(APIView):
 
             # If both intents are confirmed, include bank account info
             if exchange.is_transfer_intent and exchange.is_acceptance_intent:
-                exchange.transaction_step ==1
+                exchange.transaction_step ==2
                 seller_account = Account.objects.get(user=exchange.owner)
                 buyer_account = Account.objects.get(user=exchange.transferee)
                 print(f"[TransferIntentView] Both intents confirmed. Transferor profile: {seller_account}, {buyer_account}")
                 return Response({
                     "detail": "Both intents confirmed.",
-                    "transaction_step": 1,
+                    "transaction_step": 2,
                     "bank_account_seller": seller_account.bank_account,
                     "bank_name_seller": seller_account.bank_name,
                     "account_holder_seller": seller_account.bank_account_holder,
