@@ -264,6 +264,7 @@ class TransferIntentView(APIView):
             if exchange.is_transfer_intent and exchange.is_acceptance_intent:
                 print(f"[TransferIntentView] exchange okay: {exchange}")
                 exchange.transaction_step ==2
+                exchange.save()
                 seller_account = Account.objects.get(user=exchange.owner)
                 buyer_account = Account.objects.get(user=exchange.transferee)
                 print(f"[TransferIntentView] Both intents confirmed. Transferor profile: {seller_account}, {buyer_account}")
