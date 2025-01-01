@@ -764,16 +764,27 @@ class ExchangeListView(APIView):
         exchange_list = Exchange.objects.filter(
             Q(owner=user) | Q(transferee=user),  # owner가 user이거나 transferee가 user인 경우                  # 그리고 isTransfer가 False인 경우
         ).order_by('-id')
+        
+        transfer_list = Ticket.objects.filter(
+            owner=user,
+            isTransfer=False,
+            transferee__isnull=True  # transferee가 비어 있는 경우
+        ).order_by('-id')
+        
 
         # 교환 데이터가 없을 경우
         if not exchange_list.exists():
             return Response({"detail": "No exchanged tickets found."}, status=status.HTTP_404_NOT_FOUND)
 
         # ExchangeSerializer를 사용하여 데이터를 직렬화
-        serializer = ExchangeSerializer(exchange_list, many=True, context={'request': request})
+        exchange_serializer = ExchangeSerializer(exchange_list, many=True, context={'request': request})
+        transfer_serializer = TicketSerializer(transfer_list, many=True, context={'request': request})
 
         # 직렬화된 데이터를 반환
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            "exchanges": exchange_serializer.data,
+            "available_tickets": transfer_serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class ReceivedListView(APIView):

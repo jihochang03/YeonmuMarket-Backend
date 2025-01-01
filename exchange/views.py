@@ -93,11 +93,11 @@ class JoinExchangeView(APIView):
                 exchange.save()
 
                 ticket_1.transferee = user
-                ticket_1.status = 'exchange_pending'  # Update status for exchange
+                ticket_1.status_exchange = 'exchange_pending'  # Update status for exchange
                 ticket_1.save()
                 
                 ticket_2.transferee = exchange.owner
-                ticket_2.status = 'exchange_pending'  # Update status for exchange
+                ticket_2.status_exchange = 'exchange_pending'  # Update status for exchange
                 ticket_2.save()
 
                 print(f"[JoinExchangeView] User {user} joined the Exchange {exchange}")
