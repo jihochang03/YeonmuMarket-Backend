@@ -322,7 +322,7 @@ class ConfirmDifferenceView(APIView):
             print(f"[ConfirmDifferenceView] Exchange found: {exchange}")
 
             # 2. transaction_step이 1인지 확인
-            if exchange.transaction_step != 1:
+            if exchange.transaction_step != 2:
                 print(f"[ConfirmDifferenceView] Invalid state for confirming difference: transaction_step={exchange.transaction_step}")
                 return Response({"detail": "Invalid state to confirm difference."},
                                 status=status.HTTP_400_BAD_REQUEST)
@@ -339,13 +339,13 @@ class ConfirmDifferenceView(APIView):
             exchange.pay_direction = pay_direction
 
             # 5. transaction_step=2로 변경 후 저장
-            exchange.transaction_step = 2
+            exchange.transaction_step = 3
             exchange.save()
             print(f"[ConfirmDifferenceView] exchange updated: {exchange}")
 
             return Response({
                 "detail": "차액이 확정되었습니다.",
-                "transaction_step": 2,
+                "transaction_step": 3,
                 "difference_amount": difference_amount,
                 "pay_direction": pay_direction
             }, status=status.HTTP_200_OK)
@@ -395,19 +395,19 @@ class PaymentCompleteView(APIView):
                                 status=status.HTTP_403_FORBIDDEN)
 
             # 3. transaction_step이 2인지 확인
-            if exchange.transaction_step != 2:
+            if exchange.transaction_step != 3:
                 print(f"[PaymentCompleteView] Invalid state to confirm payment: transaction_step={exchange.transaction_step}")
                 return Response({"detail": "Invalid state to confirm payment."},
                                 status=status.HTTP_400_BAD_REQUEST)
 
             # 4. transaction_step=3 (입금 완료)로 변경 후 저장
-            exchange.transaction_step = 3
+            exchange.transaction_step = 4
             exchange.save()
             print(f"[PaymentCompleteView] exchange updated: {exchange}")
 
             return Response({
                 "detail": "Payment marked as completed.",
-                "transaction_step": 3
+                "transaction_step": 4
             }, status=status.HTTP_200_OK)
 
         except Ticket.DoesNotExist:
@@ -456,13 +456,13 @@ class ConfirmReceiptView(APIView):
                                 status=status.HTTP_403_FORBIDDEN)
 
             # 3. transaction_step이 3인지 확인
-            if exchange.transaction_step != 3:
+            if exchange.transaction_step != 4:
                 print(f"[ConfirmReceiptView] Invalid state to confirm receipt: transaction_step={exchange.transaction_step}")
                 return Response({"detail": "Invalid state to confirm receipt."},
                                 status=status.HTTP_400_BAD_REQUEST)
 
             # 4. transaction_step=4 (거래 완료)로 변경 후 저장
-            exchange.transaction_step = 4
+            exchange.transaction_step = 5
             exchange.save()
             print(f"[ConfirmReceiptView] exchange updated: {exchange}")
 
