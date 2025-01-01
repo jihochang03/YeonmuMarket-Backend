@@ -262,6 +262,7 @@ class TransferIntentView(APIView):
 
             # If both intents are confirmed, include bank account info
             if exchange.is_transfer_intent and exchange.is_acceptance_intent:
+                print(f"[TransferIntentView] exchange okay: {exchange}")
                 exchange.transaction_step ==2
                 seller_account = Account.objects.get(user=exchange.owner)
                 buyer_account = Account.objects.get(user=exchange.transferee)
@@ -271,10 +272,10 @@ class TransferIntentView(APIView):
                     "transaction_step": 2,
                     "bank_account_seller": seller_account.bank_account,
                     "bank_name_seller": seller_account.bank_name,
-                    "account_holder_seller": seller_account.bank_account_holder,
+                    "account_holder_seller": seller_account.account_holder,
                     "bank_account_buyer": buyer_account.bank_account,
                     "bank_name_buyer": buyer_account.bank_name,
-                    "account_holder_buyer": buyer_account.bank_account_holder,
+                    "account_holder_buyer": buyer_account.account_holder,
                 }, status=status.HTTP_200_OK)
 
             return Response({"detail": "Intent marked.","transaction_step": 0,}, status=status.HTTP_200_OK)
