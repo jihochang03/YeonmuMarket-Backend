@@ -287,18 +287,92 @@ class TransferIntentView(APIView):
         except Exception as e:
             print(f"[TransferIntentView] An unexpected error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class ConfirmDifferenceView(APIView):
 
+    @swagger_auto_schema(
+        operation_id="차액 확정",
+        operation_description="양도자와 양수자가 합의한 차액을 확정합니다. (transaction_step=1 → transaction_step=2)",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'differenceAmount': openapi.Schema(type=openapi.TYPE_NUMBER, description='차액 금액'),
+                'payDirection': openapi.Schema(type=openapi.TYPE_STRING, description='buyerToSeller / sellerToBuyer / none'),
+            },
+            required=['differenceAmount', 'payDirection']
+        ),
+        responses={
+            200: "차액이 확정되어 transaction_step=2 로 변경되었습니다.",
+            400: "Invalid state.",
+            403: "권한이 없는 사용자.",
+            404: "존재하지 않는 Exchange.",
+            500: "서버 에러",
+        }
+    )
+    def post(self, request, ticket_id):
+        print(f"[ConfirmDifferenceView] POST called with ticket_id: {ticket_id}")
+        try:
+            user = request.user
+            print(f"[ConfirmDifferenceView] Request user: {user}, is_authenticated: {user.is_authenticated}")
+
+            # 1. Ticket 및 Exchange 찾기
+            ticket = Ticket.objects.get(id=ticket_id)
+            print(f"[ConfirmDifferenceView] Ticket found: {ticket}")
+            exchange = Exchange.objects.get(ticket_1=ticket)  # 혹은 ticket_2 사용
+            print(f"[ConfirmDifferenceView] Exchange found: {exchange}")
+
+            # 2. transaction_step이 1인지 확인
+            if exchange.transaction_step != 1:
+                print(f"[ConfirmDifferenceView] Invalid state for confirming difference: transaction_step={exchange.transaction_step}")
+                return Response({"detail": "Invalid state to confirm difference."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # (선택) buyer/seller 구분해서 접근 권한을 줄 수도 있음.
+            # 여기서는 단순히 transaction_step으로만 제한.
+
+            # 3. 바디에서 차액 정보 가져오기
+            difference_amount = request.data.get('differenceAmount', 0)
+            pay_direction = request.data.get('payDirection', 'none')
+
+            # 4. Exchange 모델에 저장(옵션)
+            exchange.difference_amount = difference_amount
+            exchange.pay_direction = pay_direction
+
+            # 5. transaction_step=2로 변경 후 저장
+            exchange.transaction_step = 2
+            exchange.save()
+            print(f"[ConfirmDifferenceView] exchange updated: {exchange}")
+
+            return Response({
+                "detail": "차액이 확정되었습니다.",
+                "transaction_step": 2,
+                "difference_amount": difference_amount,
+                "pay_direction": pay_direction
+            }, status=status.HTTP_200_OK)
+
+        except Ticket.DoesNotExist:
+            print(f"[ConfirmDifferenceView] Ticket with id={ticket_id} does not exist.")
+            return Response({"detail": "ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exchange.DoesNotExist:
+            print(f"[ConfirmDifferenceView] Exchange with ticket_id={ticket_id} does not exist.")
+            return Response({"detail": "exchange not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            print(f"[ConfirmDifferenceView] An unexpected error occurred: {str(e)}")
+            return Response({"detail": f"An error occurred: {str(e)}"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class PaymentCompleteView(APIView):
 
     @swagger_auto_schema(
         operation_id="입금 완료 처리",
-        operation_description="양수자가 입금 완료를 확인합니다.",
+        operation_description="(transaction_step=2) → 구매자가 입금 완료를 확인하면 transaction_step=3으로 변경합니다.",
         responses={
-            200: "Payment marked as completed.",
+            200: "입금 완료 처리됨. transaction_step=3",
+            400: "Invalid state.",
             403: "Invalid user or permission denied.",
             404: "exchange not found.",
-            400: "Invalid state."
+            500: "서버 에러",
         }
     )
     def post(self, request, ticket_id):
@@ -306,43 +380,60 @@ class PaymentCompleteView(APIView):
         try:
             user = request.user
             print(f"[PaymentCompleteView] Request user: {user}, is_authenticated: {user.is_authenticated}")
+
+            # 1. Ticket 및 Exchange 찾기
             ticket = Ticket.objects.get(id=ticket_id)
             print(f"[PaymentCompleteView] Ticket found: {ticket}")
-            exchange = Exchange.objects.get(ticket=ticket)
+            exchange = Exchange.objects.get(ticket_1=ticket)  # 혹은 ticket_2
             print(f"[PaymentCompleteView] exchange found: {exchange}")
 
+            # 2. 권한 체크(양수자만 가능)
             if user != exchange.transferee:
                 print(f"[PaymentCompleteView] User {user} is not the transferee")
-                return Response({"detail": "Only the buyer can confirm payment."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"detail": "Only the buyer can confirm payment."},
+                                status=status.HTTP_403_FORBIDDEN)
 
+            # 3. transaction_step이 2인지 확인
             if exchange.transaction_step != 2:
                 print(f"[PaymentCompleteView] Invalid state to confirm payment: transaction_step={exchange.transaction_step}")
-                return Response({"detail": "Invalid state to confirm payment."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Invalid state to confirm payment."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            exchange.transaction_step = 3  # Payment completed
+            # 4. transaction_step=3 (입금 완료)로 변경 후 저장
+            exchange.transaction_step = 3
             exchange.save()
             print(f"[PaymentCompleteView] exchange updated: {exchange}")
 
-            return Response({"detail": "Payment marked as completed."}, status=status.HTTP_200_OK)
+            return Response({
+                "detail": "Payment marked as completed.",
+                "transaction_step": 3
+            }, status=status.HTTP_200_OK)
 
-        except exchange.DoesNotExist:
-            print(f"[PaymentCompleteView] exchange with id {ticket_id} does not exist.")
+        except Ticket.DoesNotExist:
+            print(f"[PaymentCompleteView] Ticket with id={ticket_id} does not exist.")
+            return Response({"detail": "ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exchange.DoesNotExist:
+            print(f"[PaymentCompleteView] exchange with ticket_id={ticket_id} does not exist.")
             return Response({"detail": "exchange not found."}, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
             print(f"[PaymentCompleteView] An unexpected error occurred: {str(e)}")
-            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"detail": f"An error occurred: {str(e)}"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ConfirmReceiptView(APIView):
 
     @swagger_auto_schema(
         operation_id="입금 확인 및 거래 완료",
-        operation_description="양도자가 입금을 확인하고 거래를 완료합니다.",
+        operation_description="(transaction_step=3) → 판매자가 입금을 확인하면 transaction_step=4로 변경하고 거래 완료 처리합니다.",
         responses={
             200: "Receipt confirmed. Transfer completed.",
+            400: "Invalid state.",
             403: "Invalid user or permission denied.",
             404: "exchange not found.",
-            400: "Invalid state."
+            500: "서버 에러",
         }
     )
     def post(self, request, ticket_id):
@@ -350,45 +441,61 @@ class ConfirmReceiptView(APIView):
         try:
             user = request.user
             print(f"[ConfirmReceiptView] Request user: {user}, is_authenticated: {user.is_authenticated}")
+
+            # 1. Ticket 및 Exchange 찾기
             ticket = Ticket.objects.get(id=ticket_id)
             print(f"[ConfirmReceiptView] Ticket found: {ticket}")
-            exchange = Exchange.objects.get(ticket=ticket)
+            exchange = Exchange.objects.get(ticket_1=ticket)  # 혹은 ticket_2
             print(f"[ConfirmReceiptView] exchange found: {exchange}")
 
+            # 2. 권한 체크(양도자만 가능)
             if user != exchange.owner:
                 print(f"[ConfirmReceiptView] User {user} is not the owner")
-                return Response({"detail": "Only the seller can confirm receipt."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"detail": "Only the seller can confirm receipt."},
+                                status=status.HTTP_403_FORBIDDEN)
 
+            # 3. transaction_step이 3인지 확인
             if exchange.transaction_step != 3:
                 print(f"[ConfirmReceiptView] Invalid state to confirm receipt: transaction_step={exchange.transaction_step}")
-                return Response({"detail": "Invalid state to confirm receipt."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Invalid state to confirm receipt."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            exchange.transaction_step = 4  # Transfer completed
+            # 4. transaction_step=4 (거래 완료)로 변경 후 저장
+            exchange.transaction_step = 4
             exchange.save()
             print(f"[ConfirmReceiptView] exchange updated: {exchange}")
 
-            # Update ticket status
-            ticket = exchange.ticket
-            ticket.status_transfer = 'transfer_completed'
+            # (선택) Ticket 상태 업데이트
+            #   - TransferIntentView 예시에서 ticket을 exchange.ticket 으로 접근했다면,
+            #     모델 구조에 맞게 수정해야 합니다.
+            #   - 필드명이 다를 수도 있으니 주의하세요.
+            ticket.status_transfer = "transfer_completed"
             ticket.save()
             print(f"[ConfirmReceiptView] Ticket updated: {ticket}")
 
-            # Return ticket file and seller's phone last digits
+            # 판매자 전화번호(마스킹되지 않은) 뒷자리 등 필요한 정보 응답
             phone_last_digits = ticket.phone_last_digits
             print(f"[ConfirmReceiptView] Transferor profile: {phone_last_digits}")
 
             return Response({
                 "detail": "Transfer completed.",
-                "ticket_file_url": ticket.uploaded_file.url,
-                "phone_last_digits": ticket.phone_last_digits,
+                "transaction_step": 4,
+                "ticket_file_url": ticket.uploaded_file.url if ticket.uploaded_file else None,
+                "phone_last_digits": phone_last_digits,
             }, status=status.HTTP_200_OK)
 
-        except exchange.DoesNotExist:
-            print(f"[ConfirmReceiptView] exchange with id {ticket_id} does not exist.")
+        except Ticket.DoesNotExist:
+            print(f"[ConfirmReceiptView] Ticket with id={ticket_id} does not exist.")
+            return Response({"detail": "ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exchange.DoesNotExist:
+            print(f"[ConfirmReceiptView] exchange with ticket_id={ticket_id} does not exist.")
             return Response({"detail": "exchange not found."}, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
             print(f"[ConfirmReceiptView] An unexpected error occurred: {str(e)}")
-            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"detail": f"An error occurred: {str(e)}"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class LeaveExchangeView(APIView):
