@@ -19,6 +19,7 @@ from django.http import HttpResponseRedirect
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 import os
+from drf_yasg import openapi
 
 # Create your @method_decorator(csrf_exempt, name='dispatch')
 class JoinExchangeView(APIView):
@@ -496,7 +497,6 @@ class ConfirmReceiptView(APIView):
             print(f"[ConfirmReceiptView] An unexpected error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class LeaveExchangeView(APIView):
 
